@@ -102,7 +102,7 @@ deinstall:
 	rm -f $(INSTALL_DIR)/bin/ffindex_get $(INSTALL_DIR)/bin/ffindex_build $(INSTALL_DIR)/bin/ffindex_modify \
 		$(INSTALL_DIR)/$(libdir)/libffindex.so.0.1 $(INSTALL_DIR)/$(libdir)/libffindex.a \
 		$(INSTALL_DIR)/$(libdir)/libffindex.so $(INSTALL_DIR)/include/ffindex.h $(INSTALL_DIR)/include/ffutil.h\
-		$(INSTALL_DIR)/bin/ffindex_from_fasta
+		$(INSTALL_DIR)/bin/ffindex_from_fasta $(INSTALL_DIR)/bin/ffindex_apply $(INSTALL_DIR)/bin/ffindex_unpack
 	rmdir $(INSTALL_DIR)/bin || true
 	rmdir $(INSTALL_DIR)/$(libdir) || true
 	rmdir $(INSTALL_DIR)/include || true
