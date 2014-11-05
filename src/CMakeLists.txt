@@ -1,6 +1,8 @@
 set(CMAKE_C_FLAGS "-std=c99")
-
+add_subdirectory(ext)
 add_library (ffindex ffindex.c ffutil.c)
+target_link_libraries(ffindex ext)
+
 target_include_directories (ffindex PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library (ffindex_shared SHARED ffindex.c ffutil.c)
