@@ -6,6 +6,7 @@ target_link_libraries(ffindex ext)
 target_include_directories (ffindex PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library (ffindex_shared SHARED ffindex.c ffutil.c)
+target_link_libraries(ffindex_shared ext)
 
 add_executable(ffindex_apply
 	ffindex_apply.c
