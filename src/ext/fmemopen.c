@@ -113,5 +113,3 @@ FILE *fmemopen(void *buf, size_t size, const char *mode) {
 
     return funopen(mem, ReadFn, WriteFn, SeekFn, CloseFn);
 }
-
-#endif
