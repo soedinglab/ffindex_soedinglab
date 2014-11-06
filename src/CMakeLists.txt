@@ -1,7 +1,12 @@
 set(CMAKE_C_FLAGS "-std=c99")
-add_subdirectory(ext)
+
 add_library (ffindex ffindex.c ffutil.c)
-target_link_libraries(ffindex ext)
+
+# the cmake file inside ext sets HAVE_FMEMOPEN
+add_subdirectory(ext)
+if(NOT HAVE_FMEMOPEN)
+	target_link_libraries(ffindex ext)
+endif()
 
 target_include_directories (ffindex PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

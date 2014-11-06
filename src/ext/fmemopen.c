@@ -12,16 +12,6 @@
 
 #include "fmemopen.h"
 
-#ifdef OS_DARWIN
-#define USE_FMEM_WRAPPER 1
-#endif
-
-#ifdef OS_FREEBSD
-#define USE_FMEM_WRAPPER 1
-#endif
-
-#ifdef USE_FMEM_WRAPPER
-
 /**
  * \brief Seek the mem file from offset and whence
  * \param handler pointer to the memfile
