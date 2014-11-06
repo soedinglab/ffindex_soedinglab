@@ -1,17 +1,18 @@
 set(CMAKE_C_FLAGS "-std=c99")
 
-add_library (ffindex ffindex.c ffutil.c)
-
-# the cmake file inside ext sets HAVE_FMEMOPEN
+# sets HAVE_FMEMOPEN
 add_subdirectory(ext)
-if(NOT HAVE_FMEMOPEN)
-	target_link_libraries(ffindex ext)
-endif()
+
+add_library (ffindex ffindex.c ffutil.c)
 
 target_include_directories (ffindex PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library (ffindex_shared SHARED ffindex.c ffutil.c)
-target_link_libraries(ffindex_shared ext)
+
+if(NOT HAVE_FMEMOPEN)
+	target_link_libraries(ffindex ext)
+	target_link_libraries(ffindex_shared ext)
+endif()
 
 add_executable(ffindex_apply
 	ffindex_apply.c
