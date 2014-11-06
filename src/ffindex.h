@@ -22,7 +22,7 @@
 #include <stdio.h>
 
 #define FFINDEX_VERSION 0.980
-#define FFINDEX_MAX_INDEX_ENTRIES_DEFAULT 40000000
+#define FFINDEX_MAX_INDEX_ENTRIES_DEFAULT 200000000 
 #define FFINDEX_MAX_ENTRY_NAME_LENTH 32
 
 enum ffindex_type { PLAIN_FILE, SORTED_FILE, SORTED_ARRAY, TREE };
@@ -44,6 +44,15 @@ typedef struct ffindex_index {
   size_t n_entries;
   ffindex_entry_t entries[]; /* This array is as big as the excess memory allocated for this struct. */
 } ffindex_index_t;
+
+/* return *out_data_file, *out_index_file, out_offset. */
+int ffindex_index_open(char *data_filename, char *index_filename, char* mode, FILE **out_data_file, FILE **out_index_file, size_t *out_offset);
+
+int ffindex_insert_filestream(FILE *data_file, FILE *index_file, size_t *offset, FILE* file, char *name);
+
+int ffindex_insert_ffindex(FILE* data_file, FILE* index_file, size_t* offset, char* data_to_add, ffindex_index_t* index_to_add);
+
+ffindex_entry_t* ffindex_get_entry_by_name(ffindex_index_t *index, char *name);
 
 int ffindex_insert_memory(FILE *data_file, FILE *index_file, size_t *offset, char *from_start, size_t from_length, char *name);
 
