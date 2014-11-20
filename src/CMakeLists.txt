@@ -66,10 +66,10 @@ add_executable(ffindex_unpack
 target_link_libraries (ffindex_unpack ffindex)
 
 
-#add_executable(ffindex_apply_mpi
-#  ffindex_apply_mpi.c
-#)
-#target_link_libraries (ffindex_apply_mpi ffindex)
+add_executable(ffindex_sort
+  ffindex_sort.c
+)
+target_link_libraries (ffindex_sort ffindex)
 
 
 install(PROGRAMS 
