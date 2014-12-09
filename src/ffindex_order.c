@@ -1,5 +1,5 @@
 /*
- * ffindex_sort
+ * ffindex_order
  * written by Milot Mirdita <milot@mirdita.de>.
  * Please add your name here if you distribute modified versions.
  * 
@@ -9,10 +9,10 @@
  * See:
  * http://creativecommons.org/licenses/by-sa/3.0/
  *
- * ffindex_sort
- * Sort an FFindex data file by the order given by file
+ * ffindex_order
+ * Reorders the entries in a FFindex data file by the order given by file
  * Each line of the order file must contain a key from the FFindex index.
- * The FFindex data file will have the same order as the order file.
+ * The FFindex data file entries will have the same order as the order file.
 */
 
 #define _GNU_SOURCE 1

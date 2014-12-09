@@ -66,10 +66,10 @@ add_executable(ffindex_unpack
 target_link_libraries (ffindex_unpack ffindex)
 
 
-add_executable(ffindex_sort
-  ffindex_sort.c
+add_executable(ffindex_order
+  ffindex_order.c
 )
-target_link_libraries (ffindex_sort ffindex)
+target_link_libraries (ffindex_order ffindex)
 
 
 install(PROGRAMS 
@@ -95,5 +95,6 @@ INSTALL(PROGRAMS
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_get
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_modify
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_unpack
+  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_order
   DESTINATION bin
 )
