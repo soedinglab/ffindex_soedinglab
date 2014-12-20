@@ -146,7 +146,7 @@ int ffindex_apply_by_entry(char *data, ffindex_index_t* index, ffindex_entry_t* 
     int status;
     waitpid(child_pid, &status, 0);
     if (WIFEXITED(status)) {
-        fprintf(stderr, "%s\t%d\n", entry->name, WEXITSTATUS(status));
+      fprintf(stderr, "%s\t%zd\t%zd\t%i\n", entry->name, entry->offset, entry->length, WEXITSTATUS(status));
     }
   }
   else
