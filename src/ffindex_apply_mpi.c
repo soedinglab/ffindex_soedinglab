@@ -143,7 +143,11 @@ int ffindex_apply_by_entry(char *data, ffindex_index_t* index, ffindex_entry_t* 
       ffindex_insert_memory(data_file_out, index_file_out, offset, read_buffer, b - read_buffer, entry->name);
     }
 
-    waitpid(child_pid, NULL, 0);
+    int status;
+    waitpid(child_pid, &status, 0);
+    if (WIFEXITED(status)) {
+      fprintf(stderr, "%s\t%zd\t%zd\t%i\n", entry->name, entry->offset, entry->length, WEXITSTATUS(status));
+    }
   }
   else
   {
@@ -281,13 +285,27 @@ int main(int argn, char **argv)
   if(data_filename_out != NULL && mpi_rank == 0)
   {
     char* merge_command  = malloc(FILENAME_MAX * 5);
+    char* tmp_filename = malloc(FILENAME_MAX);
+
     for(int i = 0; i < mpi_num_procs; i++)
     {
       snprintf( merge_command, FILENAME_MAX, "ffindex_build -as %s %s -d %s.%d -i %s.%d",
                 data_filename_out, index_filename_out, data_filename_out, i, index_filename_out, i);
       //puts(merge_command);
-      system(merge_command);
+      int ret = system(merge_command);
+
+      if(ret == 0) {
+        snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename_out, i);
+        remove(tmp_filename);
+
+        snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename_out, i);
+        remove(tmp_filename);
+      }
+
     }
+
+    free(merge_command);
+    free(tmp_filename);
   }
 
   MPI_Finalize();
