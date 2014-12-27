@@ -11,13 +11,13 @@ typedef struct node_t
     unsigned int red:1;
 } *node;
 typedef const struct node_t *const_node;
-typedef void (*__action_fn_t) (const void *, VISIT, int, void * misc);
+typedef void (*__action_fn) (const void *, VISIT, int, void * misc);
 
 
 /* Walk the nodes of a tree.
    ROOT is the root of the tree to be walked, ACTION the function to be
    called at each node.  LEVEL is the level of ROOT in the whole tree.  */
-void trecursemisc (const void *vroot, __action_fn_t action,
+void trecursemisc (const void *vroot, __action_fn action,
         int level, void * misc)
 {
     const_node root = (const_node) vroot;
@@ -36,7 +36,7 @@ void trecursemisc (const void *vroot, __action_fn_t action,
     }
 }
 
-void twalkmisc (const void *vroot, __action_fn_t action, void * misc)
+void twalkmisc (const void *vroot, __action_fn action, void * misc)
 {
     const_node root = (const_node) vroot;
 
