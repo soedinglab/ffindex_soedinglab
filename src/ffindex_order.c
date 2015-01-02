@@ -90,7 +90,9 @@ int main(int argc, char **argv)
     char *entry = ffnchomp(line, len);  
     char *filedata = ffindex_get_data_by_name(data, index, entry);
 
-    ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, strlen(filedata), entry);
+    if (filedata != NULL) {
+      ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, strlen(filedata), entry);
+    }
 
     i++;
   }
