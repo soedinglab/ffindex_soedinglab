@@ -97,6 +97,7 @@ ffindex_apply_by_entry(char *data, ffindex_index_t * index,
 			}
 			close(pipefd_stdout[1]);
 		}
+
 		// exec program with the pipe as stdin
 		ret = execvp(program_name, program_argv);
 
@@ -407,12 +408,26 @@ int main(int argn, char **argv)
 	fclose(index_file);
 	fclose(data_file);
 
-  cleanup:
-	MPI_Barrier(MPI_COMM_WORLD);
+  cleanup: ;
+	// MPI_Barrier will busy-wait in some MPI implementations,
+	// leading to 100% cpu usage.
+	// The async barrier will circumvent this problem.
+
+	int flag = 0;
+	MPI_Request request;
+	MPI_Ibarrier(MPI_COMM_WORLD, &request);
+    
+	while (flag == 0) {
+        MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+		// 1 second
+		usleep(1000000);
+    }
+
 	MPI_Finalize();
 
 	if (exit_status == EXIT_SUCCESS && mpi_rank == MASTER_RANK)
 	{
+		printf("merge");
 		ffindex_merge_splits(data_filename_out, index_filename_out, mpi_num_procs);
 	}
 	return exit_status;
