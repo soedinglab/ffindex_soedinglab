@@ -25,7 +25,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-
 #include "ffindex.h"
 #include "ffutil.h"
 
@@ -87,11 +86,12 @@ int main(int argc, char **argv)
     }
 
     // remove new line
-    char *entry = ffnchomp(line, len);  
-    char *filedata = ffindex_get_data_by_name(data, index, entry);
+    char *name = ffnchomp(line, len);
+    ffindex_entry_t* entry = ffindex_get_entry_by_name(index, name);
+    char* filedata = ffindex_get_data_by_entry(data, entry);
 
     if (filedata != NULL) {
-      ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, strlen(filedata), entry);
+      ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, entry->length, entry);
     }
 
     i++;
