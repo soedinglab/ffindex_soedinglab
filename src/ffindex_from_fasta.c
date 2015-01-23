@@ -21,19 +21,21 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <ctype.h>
 
 
 #include "ffindex.h"
 #include "ffutil.h"
 
 #define MAX_FILENAME_LIST_FILES 4096
+#define MAX_ENTRY_LENGTH 100000
 
 
 void usage(char *program_name)
 {
     fprintf(stderr, "USAGE: %s -v | [-s] data_filename index_filename fasta_filename\n"
                     "\t-s\tsort index file\n"
-                    "\nDesigned and implemented by Andreas W. Hauser <hauser@genzentrum.lmu.de>.\n", program_name);
+                    "\nBases on a Design and Implementation of Andreas W. Hauser <hauser@genzentrum.lmu.de>.\n", program_name);
 }
 
 int main(int argn, char **argv)
@@ -72,9 +74,18 @@ int main(int argn, char **argv)
 
   char *data_filename  = argv[optind++];
   char *index_filename = argv[optind++];
-  char *fasta_filename = argv[optind++];
-  FILE *data_file, *index_file, *fasta_file;
 
+  char *fasta_filename = argv[optind++];
+
+  printf("data file: %s\n", data_filename);
+  printf("index file: %s\n", index_filename);
+  printf("fasta file: %s\n", fasta_filename);
+
+
+  FILE *data_file, *index_file, *fasta_file;
+  size_t offset = 0;
+
+  //open output ffindex
   struct stat st;
 
   if(stat(data_filename, &st) == 0) { errno = EEXIST; perror(data_filename); return EXIT_FAILURE; }
@@ -85,25 +96,56 @@ int main(int argn, char **argv)
   index_file = fopen(index_filename, "w+");
   if(index_file == NULL) { perror(index_filename); return EXIT_FAILURE; }
 
+
   fasta_file = fopen(fasta_filename, "r");
   if(fasta_file == NULL) { perror(fasta_filename); return EXIT_FAILURE; }
 
   size_t fasta_size;
   char *fasta_data = ffindex_mmap_data(fasta_file, &fasta_size);
-  size_t offset = 0;
-  size_t from_length = 0;
+//  size_t from_length = 0;
+
   char name[FFINDEX_MAX_ENTRY_NAME_LENTH];
   int seq_id = 1;
+  size_t seq_id_length = 0;
+  size_t count_ws = 0;
+
+  char entry[MAX_ENTRY_LENGTH];
+  entry[0] = '>';
+  size_t entry_length = 0;
+
   for(size_t fasta_offset = 1; fasta_offset < fasta_size; fasta_offset++) // position after first ">"
   {
-    from_length = 1;
+    seq_id_length = 0;
+    count_ws = 0;
+
+    entry_length = 1;
+
     while(fasta_offset < fasta_size && !(*(fasta_data + fasta_offset) == '>' && *(fasta_data + fasta_offset - 1) == '\n'))
     {
+      char input = *(fasta_data + fasta_offset);
+
+      //get fasta name
+      if(isspace(input))
+      {
+        count_ws++;
+        name[seq_id_length] = '\0';
+      }
+      else if(count_ws == 0)
+      {
+        name[seq_id_length++] = *(fasta_data + fasta_offset);
+      }
+
+      entry[entry_length++] = input;
+
       fasta_offset++;
-      from_length++;
     }
-    sprintf(name, "%d", seq_id++);
-    ffindex_insert_memory(data_file, index_file, &offset, fasta_data + (fasta_offset - from_length), from_length, name);
+
+    if(seq_id_length == 0) {
+      sprintf(name, "%d", seq_id);
+    }
+    seq_id++;
+
+    ffindex_insert_memory(data_file, index_file, &offset, entry, entry_length, name);
   }
   fclose(data_file);
 
