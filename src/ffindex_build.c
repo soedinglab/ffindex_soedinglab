@@ -175,6 +175,17 @@ int main(int argn, char **argv)
     {
       FILE* data_file_to_add  = fopen(list_ffindex_data[i], "r");  if(  data_file_to_add == NULL) { perror(list_ffindex_data[i]); return EXIT_FAILURE; }
       FILE* index_file_to_add = fopen(list_ffindex_index[i], "r"); if( index_file_to_add == NULL) { perror(list_ffindex_index[i]); return EXIT_FAILURE; }
+
+      // ignore empty files
+      struct stat sb;
+      fstat(fileno(data_file_to_add), &sb);
+      if(sb.st_size == 0)
+          continue;
+
+      fstat(fileno(index_file_to_add), &sb);
+      if(sb.st_size == 0)
+          continue;
+
       size_t data_size;
       char *data_to_add = ffindex_mmap_data(data_file_to_add, &data_size);
       ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add, 0);

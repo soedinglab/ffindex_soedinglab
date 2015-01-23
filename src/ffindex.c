@@ -30,6 +30,8 @@
 #include "ext/fmemopen.h" /* For OS not yet implementing this new standard function */
 #include "ffutil.h"
 #include "ffindex.h"
+#include "twalkmisc.h"
+
 
 /* XXX Use page size? */
 #define FFINDEX_BUFFER_SIZE 4096
@@ -292,9 +294,14 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
   index->file = index_file;
   index->index_data = ffindex_mmap_data(index_file, &(index->index_data_size));
   if(index->index_data_size == 0)
-    warn("Problem with data file. Is it empty or is another process readning it?");
+    warn("Problem with data file. Is the file empty or is another process reading it?");
+  
   if(index->index_data == MAP_FAILED)
+  {
+    free(index);
     return NULL;
+  }
+
   index->type = SORTED_ARRAY; /* XXX Assume a sorted file for now */
   int i = 0;
   char* d = index->index_data;
@@ -491,28 +498,29 @@ ffindex_index_t* ffindex_index_as_tree(ffindex_index_t* index)
   return index;
 }
 
+void action(const void *node, const VISIT which, const int depth, void * misc)
+{
+    ffindex_entry_t *entry;
+    FILE * index_file = (FILE *) misc;
+    switch (which)
+    {
+        case preorder:
+            break;
+        case endorder:
+            break;
+        case postorder:
+        case leaf:
+            entry = *(ffindex_entry_t **) node;
+            if(fprintf(index_file, "%s\t%zd\t%zd\n", entry->name, entry->offset, entry->length) < 0)
+                break;
+    }
+}
 
 int ffindex_tree_write(ffindex_index_t* index, FILE* index_file)
 {
   int ret = EXIT_SUCCESS;
-  void action(const void *node, const VISIT which, const int depth)
-  {
-    ffindex_entry_t *entry;
-    switch (which)
-    {
-      case preorder:
-        break;
-      case endorder:
-        break;
-      case postorder:
-      case leaf:
-        entry = *(ffindex_entry_t **) node;
-        if(fprintf(index_file, "%s\t%zd\t%zd\n", entry->name, entry->offset, entry->length) < 0)
-          ret = EXIT_FAILURE;
-        break;
-    }                                        
-  }
-  twalk(index->tree_root, action);
+
+  twalkmisc(index->tree_root, action, (void *) index_file);
   return ret;
 }
 
