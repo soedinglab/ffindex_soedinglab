@@ -401,8 +401,12 @@ int main(int argn, char **argv)
 
   cleanup_2:
 	munmap(data, data_size);
-	fclose(index_file_out);
-	fclose(data_file_out);
+	if(index_file_out) {
+	  fclose(index_file_out);
+	}
+	if(data_file_out) {
+	  fclose(data_file_out);
+	}
 
   cleanup_1:
 	fclose(index_file);
