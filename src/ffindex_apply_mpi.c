@@ -25,6 +25,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <mpi.h>
+#include <signal.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
