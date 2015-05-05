@@ -83,10 +83,11 @@ install(TARGETS ffindex
 	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
 
-#ugly workaround
-install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/libffindex_shared.so
-	DESTINATION lib64 RENAME libffindex.so
+install(TARGETS ffindex_shared
+  LIBRARY DESTINATION lib64 COMPONENT libraries
+	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
+
 
 INSTALL(PROGRAMS 
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply
