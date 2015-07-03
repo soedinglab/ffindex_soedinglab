@@ -20,7 +20,7 @@ add_executable(ffindex_apply
 target_link_libraries (ffindex_apply ffindex)
 
 
-find_package(MPI QUIET)
+find_package(MPI)
 IF(MPI_FOUND)
   add_executable(ffindex_apply_mpi
     ffindex_apply_mpi.c
