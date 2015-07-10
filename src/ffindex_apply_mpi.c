@@ -25,7 +25,6 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <mpi.h>
-#include <signal.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
@@ -98,7 +97,6 @@ ffindex_apply_by_entry(char *data, ffindex_index_t * index,
 			}
 			close(pipefd_stdout[1]);
 		}
-
 		// exec program with the pipe as stdin
 		ret = execvp(program_name, program_argv);
 
@@ -413,7 +411,6 @@ int main(int argn, char **argv)
 	fclose(data_file);
 
   cleanup: ;
-
 #if MPI_VERSION >= 3
 	// MPI_Barrier will busy-wait in some MPI implementations,
 	// leading to 100% cpu usage.
@@ -435,7 +432,6 @@ int main(int argn, char **argv)
 
 	if (exit_status == EXIT_SUCCESS && mpi_rank == MASTER_RANK)
 	{
-		printf("merge");
 		ffindex_merge_splits(data_filename_out, index_filename_out, mpi_num_procs);
 	}
 	return exit_status;
