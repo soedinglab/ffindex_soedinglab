@@ -248,6 +248,9 @@ void ffindex_merge_splits(char *data_filename, char *index_filename, int splits)
 
 int main(int argn, char **argv)
 {
+#if MPI_VERSION < 3
+	fprintf(stderr, "Warning: The MPI version does not support asynchronous barriers. This means that finished MPI threads might busy wait and consume 100%% of the CPU doing nothing (Depending on your MPI implementation).\n");
+#endif
 	int exit_status = EXIT_SUCCESS;
 
 	int mpi_rank, mpi_num_procs;
@@ -410,10 +413,11 @@ int main(int argn, char **argv)
 	fclose(data_file);
 
   cleanup: ;
+
+#if MPI_VERSION >= 3
 	// MPI_Barrier will busy-wait in some MPI implementations,
 	// leading to 100% cpu usage.
 	// The async barrier will circumvent this problem.
-
 	int flag = 0;
 	MPI_Request request;
 	MPI_Ibarrier(MPI_COMM_WORLD, &request);
@@ -423,6 +427,9 @@ int main(int argn, char **argv)
 		// 1 second
 		usleep(1000000);
     }
+#else
+	MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
 	MPI_Finalize();
 
