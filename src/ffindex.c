@@ -14,6 +14,9 @@
 #define _LARGEFILE64_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 
+#include "ffindex.h"
+#include "ffutil.h"
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -28,10 +31,7 @@
 #include <unistd.h>
 
 #include "ext/fmemopen.h" /* For OS not yet implementing this new standard function */
-#include "ffutil.h"
-#include "ffindex.h"
 #include "twalkmisc.h"
-
 
 /* XXX Use page size? */
 #define FFINDEX_BUFFER_SIZE 4096
