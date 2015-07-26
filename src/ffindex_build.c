@@ -224,7 +224,8 @@ int main(int argn, char **argv)
   /* Sort the index entries and write back */
   if(sort)
   {
-    rewind(index_file);
+    fclose(index_file);
+    index_file = fopen(index_filename, "r+");
     ffindex_index_t* index = ffindex_index_parse(index_file, 0);
     if(index == NULL)
     {

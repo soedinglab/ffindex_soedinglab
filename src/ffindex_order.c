@@ -104,7 +104,8 @@ int main(int argc, char **argv)
   fclose(order_file);
 
   // sort FFindex index
-  rewind(sorted_index_file);
+  fclose(sorted_index_file);
+  sorted_index_file = fopen(sorted_index_filename, "r+");
   index = ffindex_index_parse(sorted_index_file, 0);
   if(index == NULL)  {   
     perror("ffindex_index_parse failed");

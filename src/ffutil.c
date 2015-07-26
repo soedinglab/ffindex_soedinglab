@@ -15,8 +15,8 @@
  * files.
  */
 
-#include <stdio.h>
 #include "ffutil.h"
+#include <stdio.h>
 
 int fferror_print(char *sourcecode_filename, int line, const char *function_name, const char *message)
 {
