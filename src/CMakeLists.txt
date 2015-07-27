@@ -20,7 +20,7 @@ add_executable(ffindex_apply
 target_link_libraries (ffindex_apply ffindex)
 
 
-find_package(MPI QUIET)
+find_package(MPI)
 IF(MPI_FOUND)
   add_executable(ffindex_apply_mpi
     ffindex_apply_mpi.c
@@ -83,11 +83,15 @@ install(TARGETS ffindex
 	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2e4c08924523811788650a4a1c2bf808be73d060
 install(TARGETS ffindex_shared
   LIBRARY DESTINATION lib64 COMPONENT libraries
 	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
+
 
 INSTALL(PROGRAMS 
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply
