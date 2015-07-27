@@ -83,10 +83,7 @@ install(TARGETS ffindex
 	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 2e4c08924523811788650a4a1c2bf808be73d060
 install(TARGETS ffindex_shared
   LIBRARY DESTINATION lib64 COMPONENT libraries
 	ARCHIVE DESTINATION lib64 COMPONENT libraries
