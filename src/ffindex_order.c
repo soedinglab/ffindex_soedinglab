@@ -91,7 +91,8 @@ int main(int argc, char **argv)
 
     if (entry != NULL) {
       char* filedata = ffindex_get_data_by_entry(data, entry);
-      ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, entry->length - 1, name);
+      size_t entryLength = (entry->length == 0 ) ? 0 : entry->length - 1;
+      ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, entryLength, name);
     }
 
     i++;
