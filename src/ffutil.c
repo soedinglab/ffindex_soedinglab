@@ -15,8 +15,8 @@
  * files.
  */
 
-#include <stdio.h>
 #include "ffutil.h"
+#include <stdio.h>
 
 int fferror_print(char *sourcecode_filename, int line, const char *function_name, const char *message)
 {
@@ -30,8 +30,10 @@ int fferror_print(char *sourcecode_filename, int line, const char *function_name
 /* remove \n, assumes UNIX line endings! */
 char* ffnchomp(char *s, size_t len)
 {
-  len -= 1;
-  if(len >= 0 && s[len] == '\n')
+  // prevent underflow because of the size_t
+  // we want to chomp off the last element
+  len = len > 1 ? len - 1 : 0;
+  if(s[len] == '\n')
     s[len] = '\0';
 
   return s;

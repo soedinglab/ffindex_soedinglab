@@ -11,7 +11,7 @@ See:
 http://creativecommons.org/licenses/by-sa/3.0/
 
 * Continuous Integeration
-[ ![Codeship Status for soedinglab/ffindex](https://codeship.com/projects/c7b8cf80-0306-0133-b9f4-36fe44f74615/status?branch=master)](https://codeship.com/projects/89096)
+[ ![Codeship Status for soedinglab/ffindex](https://codeship.com/projects/6c26cd00-2247-0133-1269-52bb0fef976f/status?branch=master)](https://codeship.com/projects/96084)
 
 * Thanks
 

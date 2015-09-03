@@ -15,6 +15,9 @@
  * files.
  */
 
+#ifndef FFUTIL_H
+#define FFUTIL_H
+
 #include <err.h>
 #include <errno.h>
 #include <string.h>
@@ -24,5 +27,6 @@ int fferror_print(char *sourcecode_filename, int line, const char *function_name
 
 char* ffnchomp(char *s, size_t len);
 
+#endif
 /* vim: ts=2 sw=2 et
 */
