@@ -24,6 +24,7 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <mpi.h>
 
 #include "ffindex.h"
