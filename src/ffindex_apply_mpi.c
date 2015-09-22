@@ -18,26 +18,33 @@
 #define _LARGEFILE64_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 
-#include <limits.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <mpi.h>
+#include <limits.h> // PIPE_BUF
+#include <stdlib.h> // EXIT_*, system, malloc, free
+#include <unistd.h> // pipe, fork, close, dup2, execvp, write, read, opt*
+
+#include <sys/mman.h> // munmap
+#include <sys/wait.h> // waitpid
+#include <fcntl.h>    // fcntl, F_*, O_*
+#include <signal.h>   // sigaction, sigemptyset
+#include <math.h>     // ceil
+
+#include <sys/queue.h> // SLIST_*
 
 #include "ffindex.h"
 #include "ffutil.h"
+#include "mpq/mpq.h"
 
-#define MASTER_RANK 0
+// Normalize BSD and GNU getopt
+#include "gnu_getopt/gnu_getopt.h"
 
 char read_buffer[400 * 1024 * 1024];
 
 int
-ffindex_apply_by_entry(char *data, ffindex_index_t * index,
-					   ffindex_entry_t * entry, char *program_name,
-					   char **program_argv, FILE * data_file_out, FILE * index_file_out, size_t * offset)
+ffindex_apply_by_entry(char *data,
+                       ffindex_index_t * index, ffindex_entry_t * entry,
+                       char *program_name, char **program_argv,
+                       FILE * data_file_out, FILE * index_file_out,
+                       size_t * offset)
 {
 	int ret = 0;
 	int capture_stdout = (data_file_out != NULL);
@@ -177,7 +184,8 @@ ffindex_apply_by_entry(char *data, ffindex_index_t * index,
 			}
 			close(pipefd_stdout[0]);
 
-			ffindex_insert_memory(data_file_out, index_file_out, offset, read_buffer, b - read_buffer, entry->name);
+			ffindex_insert_memory(data_file_out, index_file_out,
+                                  offset, read_buffer, b - read_buffer, entry->name);
 
 			// make sure the data is actually written so ffindex_build sees the output
 			fflush(data_file_out);
@@ -188,10 +196,12 @@ ffindex_apply_by_entry(char *data, ffindex_index_t * index,
 		waitpid(child_pid, &status, 0);
 		if (WIFEXITED(status))
 		{
-			fprintf(stdout, "%s\t%zd\t%zd\t%i\n", entry->name, entry->offset, entry->length, WEXITSTATUS(status));
+			fprintf(stdout, "%s\t%zd\t%zd\t%i\n",
+                    entry->name, entry->offset, entry->length, WEXITSTATUS(status));
 		}
 	}
-	else						// fork failed
+    // fork failed
+	else
 	{
 		fprintf(stderr, "ERROR in fork()\n");
 		perror(entry->name);
@@ -200,69 +210,191 @@ ffindex_apply_by_entry(char *data, ffindex_index_t * index,
 	return EXIT_SUCCESS;
 }
 
+typedef struct worker_splits_s worker_splits_t;
+
+struct worker_splits_s {
+    int start;
+    int end;
+    int status;
+    SLIST_ENTRY(worker_splits_s) entries;
+};
+
+SLIST_HEAD(worker_splits, worker_splits_s) worker_splits_head;
+
+void ffindex_worker_merge_splits(char* data_filename, char* index_filename, int worker_rank, int remove_temporary)
+{
+    if (!data_filename)
+        return;
+
+    if (!index_filename)
+        return;
+
+    char merge_command[FILENAME_MAX * 5];
+    char tmp_filename[FILENAME_MAX];
+
+    worker_splits_t* entry;
+    SLIST_FOREACH(entry, &worker_splits_head, entries) {
+        snprintf(merge_command, FILENAME_MAX,
+                 "ffindex_build -as -d %s.%d.%d.%d -i %s.%d.%d.%d %s.%d %s.%d",
+                 data_filename, worker_rank, entry->start, entry->end,
+                 index_filename, worker_rank, entry->start, entry->end,
+                 data_filename, worker_rank,
+                 index_filename, worker_rank);
+
+        int exit_status = system(merge_command);
+        if (exit_status == 0 && remove_temporary)
+        {
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d.%d.%d",
+                     index_filename, worker_rank, entry->start, entry->end);
+            remove(tmp_filename);
+            
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d.%d.%d",
+                     data_filename, worker_rank, entry->start, entry->end);
+            remove(tmp_filename);
+        }
+    }
+}
+
+void ffindex_merge_splits(char* data_filename, char* index_filename, int splits, int remove_temporary)
+{
+    if (!data_filename)
+        return;
+
+    if (!index_filename)
+        return;
+
+    char merge_command[FILENAME_MAX * 5];
+    char tmp_filename[FILENAME_MAX];
+
+    for (int i = 1; i < splits; i++)
+    {
+        snprintf(merge_command, FILENAME_MAX,
+                 "ffindex_build -as -d %s.%d -i %s.%d %s %s",
+                 data_filename, i, index_filename, i, data_filename, index_filename);
+
+        int ret = system(merge_command);
+        if (ret == 0 && remove_temporary)
+        {
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename, i);
+            remove(tmp_filename);
+            
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename, i);
+            remove(tmp_filename);
+        }
+    }
+}
+
+typedef struct ffindex_apply_mpi_data_s ffindex_apply_mpi_data_t;
+struct ffindex_apply_mpi_data_s {
+    ffindex_index_t* index;
+    void	*  data;
+    char*  data_filename_out;
+    char*  index_filename_out;
+    char*  program_name;
+    char** program_argv;
+};
+
+int ffindex_apply_worker_payload (const size_t start, const size_t end, const void* data) {
+    ffindex_apply_mpi_data_t* apply_data = (ffindex_apply_mpi_data_t*) data;
+
+    FILE *data_file_out = NULL;
+    if (apply_data->data_filename_out != NULL)
+    {
+        char data_filename_out_rank[FILENAME_MAX];
+        snprintf(data_filename_out_rank, FILENAME_MAX, "%s.%d.%zu.%zu",
+                 apply_data->data_filename_out, MPQ_rank, start, end);
+
+        data_file_out = fopen(data_filename_out_rank, "w+");
+        if (data_file_out == NULL)
+        {
+            fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", apply_data->data_filename_out);
+            return EXIT_FAILURE;
+        }
+    }
+
+    FILE *index_file_out = NULL;
+    if (apply_data->index_filename_out != NULL)
+    {
+        char index_filename_out_rank[FILENAME_MAX];
+        snprintf(index_filename_out_rank, FILENAME_MAX, "%s.%d.%zu.%zu",
+                 apply_data->index_filename_out, MPQ_rank, start, end);
+
+        index_file_out = fopen(index_filename_out_rank, "w+");
+        if (index_file_out == NULL)
+        {
+            fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", apply_data->index_filename_out);
+            return EXIT_FAILURE;
+        }
+    }
+
+    int exit_status = EXIT_SUCCESS;
+    size_t offset = 0;
+    for (size_t i = start; i < end; i++)
+    {
+        ffindex_entry_t *entry = ffindex_get_entry_by_index(apply_data->index, i);
+        if (entry == NULL)
+        {
+            perror(entry->name);
+            exit_status = errno;
+            break;
+        }
+
+        int error = ffindex_apply_by_entry(apply_data->data, apply_data->index, entry,
+                                           apply_data->program_name,
+                                           apply_data->program_argv, data_file_out,
+                                           index_file_out, &offset);
+        if (error != 0)
+        {
+            perror(entry->name);
+            exit_status = errno;
+            break;
+        }
+    }
+
+    if (index_file_out) {
+        fclose(index_file_out);
+    }
+    if (data_file_out) {
+        fclose(data_file_out);
+    }
+
+    worker_splits_t* entry = malloc(sizeof(worker_splits_t));
+    entry->start = start;
+    entry->end = end;
+    entry->status = exit_status;
+    SLIST_INSERT_HEAD(&worker_splits_head, entry, entries);
+
+    return exit_status;
+}
+
 void usage()
 {
-	fprintf(stderr,
-			"USAGE: ffindex_apply_mpi -d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
-			"\nDesigned and implemented by Andy Hauser <hauser@genzentrum.lmu.de>.\n");
+    fprintf(stderr,
+            "USAGE: ffindex_apply_mpi -d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT [-p PARTS] DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
+            "\nDesigned and implemented by Andy Hauser <hauser@genzentrum.lmu.de>\n"
+            "\nand Milot Mirdita <milot@mirdita.de>.\n");
 }
 
-void ignore_signal(int sig)
+void ignore_signal(int signal)
 {
-	struct sigaction handler;
-	handler.sa_handler = SIG_IGN;
-	sigemptyset(&handler.sa_mask);
-	handler.sa_flags = 0;
-	sigaction(sig, &handler, NULL);
+    struct sigaction handler;
+    handler.sa_handler = SIG_IGN;
+    sigemptyset(&handler.sa_mask);
+    handler.sa_flags = 0;
+    sigaction(signal, &handler, NULL);
 }
 
-void ffindex_merge_splits(char *data_filename, char *index_filename, int splits)
+int main(int argn, char** argv)
 {
-	if (!data_filename)
-		return;
-
-	if (!index_filename)
-		return;
-
-	char merge_command[FILENAME_MAX * 5];
-	char tmp_filename[FILENAME_MAX];
-
-	for (int i = 0; i < splits; i++)
-	{
-		snprintf(merge_command, FILENAME_MAX,
-				 "ffindex_build -as %s %s -d %s.%d -i %s.%d",
-				 data_filename, index_filename, data_filename, i, index_filename, i);
-
-		int ret = system(merge_command);
-		if (ret == 0)
-		{
-			snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename, i);
-			remove(tmp_filename);
-
-			snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename, i);
-			remove(tmp_filename);
-		}
-	}
-}
-
-int main(int argn, char **argv)
-{
-#if MPI_VERSION < 3
-	fprintf(stderr, "Warning: The MPI version does not support asynchronous barriers. This means that finished MPI threads might busy wait and consume 100%% of the CPU doing nothing (Depending on your MPI implementation).\n");
-#endif
 	int exit_status = EXIT_SUCCESS;
 
-	int mpi_rank, mpi_num_procs;
+    MPQ_Init(argn, argv);
 
-	MPI_Init(&argn, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &mpi_num_procs);
-
-
+    int parts = 10;
 	char *data_filename_out = NULL, *index_filename_out = NULL;
 
 	int opt;
-	while ((opt = getopt(argn, argv, "d:i:")) != -1)
+	while ((opt = gnu_getopt(argn, argv, "d:i:p::")) != -1)
 	{
 		switch (opt)
 		{
@@ -272,6 +404,9 @@ int main(int argn, char **argv)
 		case 'i':
 			index_filename_out = optarg;
 			break;
+        case 'p':
+            parts = optarg;
+            break;
 		}
 	}
 
@@ -298,38 +433,7 @@ int main(int argn, char **argv)
 	{
 		fferror_print(__FILE__, __LINE__, argv[0], index_filename);
 		exit_status = EXIT_FAILURE;
-		goto cleanup;
-	}
-
-	// Setup one output FFindex for each MPI process
-	FILE *data_file_out = NULL;
-	if (data_filename_out != NULL)
-	{
-		char data_filename_out_rank[FILENAME_MAX];
-		snprintf(data_filename_out_rank, FILENAME_MAX, "%s.%d", data_filename_out, mpi_rank);
-
-		data_file_out = fopen(data_filename_out_rank, "w+");
-		if (data_file_out == NULL)
-		{
-			fferror_print(__FILE__, __LINE__, argv[0], data_filename_out);
-			exit_status = EXIT_FAILURE;
-			goto cleanup_1;
-		}
-	}
-
-	FILE *index_file_out = NULL;
-	if (index_filename_out != NULL)
-	{
-		char index_filename_out_rank[FILENAME_MAX];
-		snprintf(index_filename_out_rank, FILENAME_MAX, "%s.%d", index_filename_out, mpi_rank);
-
-		index_file_out = fopen(index_filename_out_rank, "w+");
-		if (index_file_out == NULL)
-		{
-			fferror_print(__FILE__, __LINE__, argv[0], index_filename_out);
-			exit_status = EXIT_FAILURE;
-			goto cleanup_1;
-		}
+		goto cleanup_1;
 	}
 
 	char *program_name = argv[optind];
@@ -349,95 +453,52 @@ int main(int argn, char **argv)
 	// Ignore SIGPIPE
 	ignore_signal(SIGPIPE);
 
+    if (MPQ_rank != MPQ_MASTER) {
+        SLIST_INIT(&worker_splits_head);
+    }
 
-	// calculate range splits for the different mpi workers
-	size_t batch_size, left_over, range_start = 0, range_end = 0;
+    ffindex_apply_mpi_data_t* payload_data = malloc(sizeof(ffindex_apply_mpi_data_t));
+    payload_data->index = index;
+    payload_data->data = data;
+    payload_data->program_name = program_name;
+    payload_data->program_argv = program_argv;
+    payload_data->data_filename_out = data_filename_out;
+    payload_data->index_filename_out = index_filename_out;
 
-	batch_size = index->n_entries / mpi_num_procs;
-	left_over = index->n_entries % mpi_num_procs;
+    MPQ_Payload = ffindex_apply_worker_payload;
+    MPQ_Payload_Environment = (void*) payload_data;
 
-	if (batch_size > 0)
-	{
-		range_start = mpi_rank * batch_size;
-		range_end = range_start + batch_size;
+    int split_size = (int) ceil(((double) index->n_entries / (double) (MPQ_size - 1)) / (double) parts);
+    MPQ_Main(index->n_entries, (split_size > 1 ? split_size : 1));
+    
+    free(payload_data);
 
-		// the last worker will handle the left over entries
-		// this can result in the last worker to have to process mpi_num_procs - 1 tasks more then the rest
-		// this is usually alright because the number of tasks is a lot bigger than the number of workers
-		if (mpi_rank == mpi_num_procs - 1)
-		{
-			range_end += left_over;
-		}
-	}
-	else
-	{
-		// we have less jobs than we have workers
-		if (mpi_rank < left_over)
-		{
-			range_start = mpi_rank;
-			range_end = mpi_rank + 1;
-		}
-	}
+    if (MPQ_rank != MPQ_MASTER) {
+        ffindex_worker_merge_splits(data_filename_out, index_filename_out, MPQ_rank, 1);
 
-	size_t offset = 0;
-	for (size_t i = range_start; i < range_end; i++)
-	{
-		ffindex_entry_t *entry = ffindex_get_entry_by_index(index, i);
-		if (entry == NULL)
-		{
-			perror(entry->name);
-			exit_status = errno;
-			goto cleanup_2;
-		}
+        while (!SLIST_EMPTY(&worker_splits_head)) {
+            worker_splits_t* entry = SLIST_FIRST(&worker_splits_head);
+            SLIST_REMOVE_HEAD(&worker_splits_head, entries);
+            free(entry);
+        }
+    }
 
-		int error = ffindex_apply_by_entry(data, index, entry,
-										   program_name,
-										   program_argv, data_file_out,
-										   index_file_out, &offset);
-		if (error != 0)
-		{
-			perror(entry->name);
-			exit_status = errno;
-			goto cleanup_2;
-		}
-	}
+    munmap(index->index_data, index->index_data_size);
+    free(index);
 
   cleanup_2:
 	munmap(data, data_size);
-	if(index_file_out) {
-	  fclose(index_file_out);
-	}
-	if(data_file_out) {
-	  fclose(data_file_out);
-	}
+	fclose(index_file);
 
   cleanup_1:
-	fclose(index_file);
 	fclose(data_file);
 
-  cleanup: ;
-#if MPI_VERSION >= 3
-	// MPI_Barrier will busy-wait in some MPI implementations,
-	// leading to 100% cpu usage.
-	// The async barrier will circumvent this problem.
-	int flag = 0;
-	MPI_Request request;
-	MPI_Ibarrier(MPI_COMM_WORLD, &request);
-    
-	while (flag == 0) {
-        MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
-		// 1 second
-		usleep(1000000);
-    }
-#else
-	MPI_Barrier(MPI_COMM_WORLD);
-#endif
+  cleanup:
+    MPQ_Finalize();
 
-	MPI_Finalize();
-
-	if (exit_status == EXIT_SUCCESS && mpi_rank == MASTER_RANK)
+	if (exit_status == EXIT_SUCCESS && MPQ_rank == MPQ_MASTER)
 	{
-		ffindex_merge_splits(data_filename_out, index_filename_out, mpi_num_procs);
+		ffindex_merge_splits(data_filename_out, index_filename_out, MPQ_size, 1);
 	}
 	return exit_status;
 }
