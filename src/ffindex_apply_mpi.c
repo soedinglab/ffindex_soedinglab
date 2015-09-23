@@ -285,43 +285,41 @@ void ffindex_merge_splits(char* data_filename, char* index_filename, int splits,
 
 typedef struct ffindex_apply_mpi_data_s ffindex_apply_mpi_data_t;
 struct ffindex_apply_mpi_data_s {
-    ffindex_index_t* index;
     void	*  data;
+    ffindex_index_t* index;
     char*  data_filename_out;
     char*  index_filename_out;
     char*  program_name;
     char** program_argv;
-};
+} ffindex_payload_environment;
 
-int ffindex_apply_worker_payload (const size_t start, const size_t end, const void* data) {
-    ffindex_apply_mpi_data_t* apply_data = (ffindex_apply_mpi_data_t*) data;
-
+int ffindex_apply_worker_payload (const size_t start, const size_t end) {
     FILE *data_file_out = NULL;
-    if (apply_data->data_filename_out != NULL)
+    if (ffindex_payload_environment.data_filename_out != NULL)
     {
         char data_filename_out_rank[FILENAME_MAX];
         snprintf(data_filename_out_rank, FILENAME_MAX, "%s.%d.%zu.%zu",
-                 apply_data->data_filename_out, MPQ_rank, start, end);
+                 ffindex_payload_environment.data_filename_out, MPQ_rank, start, end);
 
         data_file_out = fopen(data_filename_out_rank, "w+");
         if (data_file_out == NULL)
         {
-            fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", apply_data->data_filename_out);
+            fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", ffindex_payload_environment.data_filename_out);
             return EXIT_FAILURE;
         }
     }
 
     FILE *index_file_out = NULL;
-    if (apply_data->index_filename_out != NULL)
+    if (ffindex_payload_environment.index_filename_out != NULL)
     {
         char index_filename_out_rank[FILENAME_MAX];
         snprintf(index_filename_out_rank, FILENAME_MAX, "%s.%d.%zu.%zu",
-                 apply_data->index_filename_out, MPQ_rank, start, end);
+                 ffindex_payload_environment.index_filename_out, MPQ_rank, start, end);
 
         index_file_out = fopen(index_filename_out_rank, "w+");
         if (index_file_out == NULL)
         {
-            fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", apply_data->index_filename_out);
+            fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", ffindex_payload_environment.index_filename_out);
             return EXIT_FAILURE;
         }
     }
@@ -330,7 +328,7 @@ int ffindex_apply_worker_payload (const size_t start, const size_t end, const vo
     size_t offset = 0;
     for (size_t i = start; i < end; i++)
     {
-        ffindex_entry_t *entry = ffindex_get_entry_by_index(apply_data->index, i);
+        ffindex_entry_t *entry = ffindex_get_entry_by_index(ffindex_payload_environment.index, i);
         if (entry == NULL)
         {
             perror(entry->name);
@@ -338,9 +336,9 @@ int ffindex_apply_worker_payload (const size_t start, const size_t end, const vo
             break;
         }
 
-        int error = ffindex_apply_by_entry(apply_data->data, apply_data->index, entry,
-                                           apply_data->program_name,
-                                           apply_data->program_argv, data_file_out,
+        int error = ffindex_apply_by_entry(ffindex_payload_environment.data, ffindex_payload_environment.index, entry,
+                                           ffindex_payload_environment.program_name,
+                                           ffindex_payload_environment.program_argv, data_file_out,
                                            index_file_out, &offset);
         if (error != 0)
         {
@@ -369,9 +367,17 @@ int ffindex_apply_worker_payload (const size_t start, const size_t end, const vo
 void usage()
 {
     fprintf(stderr,
-            "USAGE: ffindex_apply_mpi -d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT [-p PARTS] DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
+            "USAGE: ffindex_apply_mpi [-p PARTS] -d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
             "\nDesigned and implemented by Andy Hauser <hauser@genzentrum.lmu.de>\n"
-            "\nand Milot Mirdita <milot@mirdita.de>.\n");
+            "and Milot Mirdita <milot@mirdita.de>.\n\n"
+            "\t[-p PARTS]\t\tSets the effective split size for one batch to be computed for one worker.\n"
+            "\t\tThe split size is computed with Total Number of Jobs / Number of Workers / PARTS.\n"
+            "\t-d DATA_FILENAME_OUT\tFFindex data file where the results will be saved to.\n"
+            "\t-i INDEX_FILENAME_OUT\tFFindex index file where the results will be saved to.\n"
+            "\tDATA_FILENAME\t\tInput ffindex data file.\n"
+            "\tINDEX_FILENAME\t\tInput ffindex index file.\n"
+            "\tPROGRAM [PROGRAM_ARGS]\tProgram to be executed for every ffindex entry.\n"
+        );
 }
 
 void ignore_signal(int signal)
@@ -404,14 +410,14 @@ int main(int argn, char** argv)
 			index_filename_out = optarg;
 			break;
         case 'p':
-            parts = optarg;
+            parts = (int) optarg;
             break;
 		}
 	}
 
 	if (argn - optind < 3)
 	{
-		fprintf(stderr, "Not enough arguments %d.\n", optind - argn);
+		fprintf(stderr, "Not enough arguments %d.\n\n", argn - optind);
 		usage();
 		exit_status = EXIT_FAILURE;
 		goto cleanup;
@@ -456,22 +462,18 @@ int main(int argn, char** argv)
         SLIST_INIT(&worker_splits_head);
     }
 
-    ffindex_apply_mpi_data_t* payload_data = malloc(sizeof(ffindex_apply_mpi_data_t));
-    payload_data->index = index;
-    payload_data->data = data;
-    payload_data->program_name = program_name;
-    payload_data->program_argv = program_argv;
-    payload_data->data_filename_out = data_filename_out;
-    payload_data->index_filename_out = index_filename_out;
+    ffindex_payload_environment.data = data;
+    ffindex_payload_environment.index = index;
+    ffindex_payload_environment.program_name = program_name;
+    ffindex_payload_environment.program_argv = program_argv;
+    ffindex_payload_environment.data_filename_out = data_filename_out;
+    ffindex_payload_environment.index_filename_out = index_filename_out;
 
     MPQ_Payload = ffindex_apply_worker_payload;
-    MPQ_Payload_Environment = (void*) payload_data;
 
     // ceil div
     int split_size = ((index->n_entries - 1) / ((MPQ_size - 1) * parts)) + 1;
     MPQ_Main(index->n_entries, (split_size > 1 ? split_size : 1));
-    
-    free(payload_data);
 
     if (MPQ_rank != MPQ_MASTER) {
         ffindex_worker_merge_splits(data_filename_out, index_filename_out, MPQ_rank, 1);

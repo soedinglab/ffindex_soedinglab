@@ -34,7 +34,7 @@ void MPQ_Worker ()
             break;
         }
 
-        int exit_status = MPQ_Payload(message[1], message[2], MPQ_Payload_Environment);
+        int exit_status = MPQ_Payload(message[1], message[2]);
 
         message[0] = MSG_RESULT;
         message[1] = exit_status;
@@ -137,5 +137,4 @@ void MPQ_Finalize ()
     MPI_Finalize();
 
     MPQ_Payload = NULL;
-    MPQ_Payload_Environment = NULL;
 }
