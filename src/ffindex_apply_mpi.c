@@ -26,7 +26,6 @@
 #include <sys/wait.h> // waitpid
 #include <fcntl.h>    // fcntl, F_*, O_*
 #include <signal.h>   // sigaction, sigemptyset
-#include <math.h>     // ceil
 
 #include <sys/queue.h> // SLIST_*
 
@@ -468,7 +467,8 @@ int main(int argn, char** argv)
     MPQ_Payload = ffindex_apply_worker_payload;
     MPQ_Payload_Environment = (void*) payload_data;
 
-    int split_size = (int) ceil(((double) index->n_entries / (double) (MPQ_size - 1)) / (double) parts);
+    // ceil div
+    int split_size = ((index->n_entries - 1) / ((MPQ_size - 1) * parts)) + 1;
     MPQ_Main(index->n_entries, (split_size > 1 ? split_size : 1));
     
     free(payload_data);
