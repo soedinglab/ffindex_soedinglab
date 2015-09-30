@@ -31,6 +31,8 @@
 
 #include <sys/queue.h> // SLIST_*
 
+#include <assert.h>    // assert
+
 #include "ffindex.h"
 #include "ffutil.h"
 #include "mpq/mpq.h"
@@ -220,69 +222,6 @@ struct worker_splits_s {
 
 SLIST_HEAD(worker_splits, worker_splits_s) worker_splits_head;
 
-void ffindex_worker_merge_splits(char* data_filename, char* index_filename, int worker_rank, int remove_temporary)
-{
-    if (!data_filename)
-        return;
-
-    if (!index_filename)
-        return;
-
-    char merge_command[FILENAME_MAX * 5];
-    char tmp_filename[FILENAME_MAX];
-
-    worker_splits_t* entry;
-    SLIST_FOREACH(entry, &worker_splits_head, entries) {
-        snprintf(merge_command, FILENAME_MAX,
-                 "ffindex_build -as -d %s.%d.%d.%d -i %s.%d.%d.%d %s.%d %s.%d",
-                 data_filename, worker_rank, entry->start, entry->end,
-                 index_filename, worker_rank, entry->start, entry->end,
-                 data_filename, worker_rank,
-                 index_filename, worker_rank);
-
-        int exit_status = system(merge_command);
-        if (exit_status == 0 && remove_temporary)
-        {
-            snprintf(tmp_filename, FILENAME_MAX, "%s.%d.%d.%d",
-                     index_filename, worker_rank, entry->start, entry->end);
-            remove(tmp_filename);
-            
-            snprintf(tmp_filename, FILENAME_MAX, "%s.%d.%d.%d",
-                     data_filename, worker_rank, entry->start, entry->end);
-            remove(tmp_filename);
-        }
-    }
-}
-
-void ffindex_merge_splits(char* data_filename, char* index_filename, int splits, int remove_temporary)
-{
-    if (!data_filename)
-        return;
-
-    if (!index_filename)
-        return;
-
-    char merge_command[FILENAME_MAX * 5];
-    char tmp_filename[FILENAME_MAX];
-
-    for (int i = 1; i < splits; i++)
-    {
-        snprintf(merge_command, FILENAME_MAX,
-                 "ffindex_build -as -d %s.%d -i %s.%d %s %s",
-                 data_filename, i, index_filename, i, data_filename, index_filename);
-
-        int ret = system(merge_command);
-        if (ret == 0 && remove_temporary)
-        {
-            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename, i);
-            remove(tmp_filename);
-            
-            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename, i);
-            remove(tmp_filename);
-        }
-    }
-}
-
 typedef struct ffindex_apply_mpi_data_s ffindex_apply_mpi_data_t;
 struct ffindex_apply_mpi_data_s {
     void	*  data;
@@ -364,6 +303,128 @@ int ffindex_apply_worker_payload (const size_t start, const size_t end) {
     return exit_status;
 }
 
+void ffindex_worker_merge_splits(char* data_filename, char* index_filename, int worker_rank, int remove_temporary)
+{
+    if (!data_filename)
+        return;
+
+    if (!index_filename)
+        return;
+
+    char merge_command[FILENAME_MAX * 5];
+    char tmp_filename[FILENAME_MAX];
+
+    worker_splits_t* entry;
+    SLIST_FOREACH(entry, &worker_splits_head, entries) {
+        snprintf(merge_command, FILENAME_MAX,
+                 "ffindex_build -as -d %s.%d.%d.%d -i %s.%d.%d.%d %s.%d %s.%d",
+                 data_filename, worker_rank, entry->start, entry->end,
+                 index_filename, worker_rank, entry->start, entry->end,
+                 data_filename, worker_rank,
+                 index_filename, worker_rank);
+
+        int exit_status = system(merge_command);
+        if (exit_status == 0 && remove_temporary)
+        {
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d.%d.%d",
+                     index_filename, worker_rank, entry->start, entry->end);
+            remove(tmp_filename);
+
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d.%d.%d",
+                     data_filename, worker_rank, entry->start, entry->end);
+            remove(tmp_filename);
+        }
+    }
+}
+
+void ffindex_merge_splits(char* data_filename, char* index_filename, int splits, int remove_temporary)
+{
+    if (!data_filename)
+        return;
+
+    if (!index_filename)
+        return;
+
+    char merge_command[FILENAME_MAX * 5];
+    char tmp_filename[FILENAME_MAX];
+
+    for (int i = 1; i < splits; i++)
+    {
+        snprintf(merge_command, FILENAME_MAX,
+                 "ffindex_build -as -d %s.%d -i %s.%d %s %s",
+                 data_filename, i, index_filename, i, data_filename, index_filename);
+
+        int ret = system(merge_command);
+        if (ret == 0 && remove_temporary)
+        {
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename, i);
+            remove(tmp_filename);
+
+            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename, i);
+            remove(tmp_filename);
+        }
+    }
+}
+
+int ceildiv(int x, int y) {
+    assert(x > 0 && y > 0);
+    int q = (x + y - 1) / y;
+    return (q > 1 ? q : 1);
+}
+
+int
+process_queue(int argn, char** argv, int parts)
+{
+
+    int mpq_status = mpq_status = MPQ_Init(argn, argv,
+                                           ffindex_payload_environment.index->n_entries);
+
+    if (mpq_status != MPQ_SUCCESS)
+        return mpq_status;
+
+
+    if (MPQ_rank != MPQ_MASTER) {
+        SLIST_INIT(&worker_splits_head);
+    }
+
+    MPQ_Payload = ffindex_apply_worker_payload;
+    int split_size = ceildiv(ceildiv(ffindex_payload_environment.index->n_entries, MPQ_size), parts);
+    MPQ_Main(split_size);
+
+    if (MPQ_rank != MPQ_MASTER)
+    {
+        ffindex_worker_merge_splits(ffindex_payload_environment.data_filename_out,
+                                    ffindex_payload_environment.index_filename_out, MPQ_rank, 1);
+
+        while (!SLIST_EMPTY(&worker_splits_head))
+        {
+            worker_splits_t* entry = SLIST_FIRST(&worker_splits_head);
+            SLIST_REMOVE_HEAD(&worker_splits_head, entries);
+            free(entry);
+        }
+    }
+
+
+    MPQ_Finalize();
+
+    if (MPQ_rank == MPQ_MASTER)
+    {
+        ffindex_merge_splits(ffindex_payload_environment.data_filename_out,
+                             ffindex_payload_environment.index_filename_out, MPQ_size, 1);
+    }
+
+    return MPQ_SUCCESS;
+}
+
+void ignore_signal(int signal)
+{
+    struct sigaction handler;
+    handler.sa_handler = SIG_IGN;
+    sigemptyset(&handler.sa_mask);
+    handler.sa_flags = 0;
+    sigaction(signal, &handler, NULL);
+}
+
 void usage()
 {
     fprintf(stderr,
@@ -377,22 +438,14 @@ void usage()
             "\tDATA_FILENAME\t\tInput ffindex data file.\n"
             "\tINDEX_FILENAME\t\tInput ffindex index file.\n"
             "\tPROGRAM [PROGRAM_ARGS]\tProgram to be executed for every ffindex entry.\n"
-        );
-}
-
-void ignore_signal(int signal)
-{
-    struct sigaction handler;
-    handler.sa_handler = SIG_IGN;
-    sigemptyset(&handler.sa_mask);
-    handler.sa_flags = 0;
-    sigaction(signal, &handler, NULL);
+            );
 }
 
 int main(int argn, char** argv)
 {
+    ignore_signal(SIGPIPE);
+
     int exit_status = EXIT_SUCCESS;
-    int mpq_status = MPQ_ERROR_UNKNOWN;
 
     int parts = 10;
     char *data_filename_out  = NULL;
@@ -440,8 +493,7 @@ int main(int argn, char** argv)
 
 		usage();
 
-        exit_status = EXIT_FAILURE;
-		goto cleanup;
+        return EXIT_FAILURE;
 	}
 
     if ((!data_filename_out && index_filename_out) || (data_filename_out && !index_filename_out))
@@ -450,8 +502,7 @@ int main(int argn, char** argv)
 
         usage();
 
-        exit_status = EXIT_FAILURE;
-        goto cleanup;
+        return EXIT_FAILURE;
     }
 
 	char *data_filename = argv[optind++];
@@ -459,8 +510,7 @@ int main(int argn, char** argv)
 	if (data_file == NULL)
 	{
 		fferror_print(__FILE__, __LINE__, argv[0], data_filename);
-		exit_status = EXIT_FAILURE;
-		goto cleanup;
+		return EXIT_FAILURE;
 	}
 
 	char *index_filename = argv[optind++];
@@ -477,40 +527,20 @@ int main(int argn, char** argv)
 
 	size_t data_size;
 	char *data = ffindex_mmap_data(data_file, &data_size);
+    if (data == MAP_FAILED)
+    {
+        fferror_print(__FILE__, __LINE__, "ffindex_mmap_data", index_filename);
+        exit_status = EXIT_FAILURE;
+        goto cleanup_2;
+    }
 
 	ffindex_index_t *index = ffindex_index_parse(index_file, 0);
 	if (index == NULL)
 	{
 		fferror_print(__FILE__, __LINE__, "ffindex_index_parse", index_filename);
 		exit_status = EXIT_FAILURE;
-		goto cleanup_2;
+		goto cleanup_3;
 	}
-
-	// Ignore SIGPIPE
-	ignore_signal(SIGPIPE);
-
-    // ceil div
-    int split_size = ((index->n_entries - 1) / ((MPQ_size - 1) * parts)) + 1;
-    mpq_status = MPQ_Init(argn, argv, index->n_entries, (split_size > 1 ? split_size : 1));
-
-    switch (mpq_status) {
-        case MPQ_ERROR_NO_WORKERS:
-            fprintf(stderr, "MPQ_Init: Needs at least one worker process.\n");
-            exit_status = EXIT_FAILURE;
-            goto cleanup_3;
-        case MPQ_ERROR_TOO_MANY_WORKERS:
-            fprintf(stderr, "MPQ_Init: Too many worker processes.\n");
-            exit_status = EXIT_FAILURE;
-            goto cleanup_3;
-        case MPQ_SUCCESS:
-        default:
-            break;
-    }
-
-
-    if (MPQ_rank != MPQ_MASTER) {
-        SLIST_INIT(&worker_splits_head);
-    }
 
     ffindex_payload_environment.data = data;
     ffindex_payload_environment.index = index;
@@ -519,38 +549,33 @@ int main(int argn, char** argv)
     ffindex_payload_environment.data_filename_out = data_filename_out;
     ffindex_payload_environment.index_filename_out = index_filename_out;
 
-    MPQ_Payload = ffindex_apply_worker_payload;
-
-    MPQ_Main();
-
-    if (MPQ_rank != MPQ_MASTER) {
-        ffindex_worker_merge_splits(data_filename_out, index_filename_out, MPQ_rank, 1);
-
-        while (!SLIST_EMPTY(&worker_splits_head)) {
-            worker_splits_t* entry = SLIST_FIRST(&worker_splits_head);
-            SLIST_REMOVE_HEAD(&worker_splits_head, entries);
-            free(entry);
-        }
+    int mpq_status = process_queue(argn, argv, parts);
+    switch (mpq_status) {
+        case MPQ_ERROR_NO_WORKERS:
+            fprintf(stderr, "MPQ_Init: Needs at least one worker process.\n");
+            return EXIT_FAILURE;
+        case MPQ_ERROR_TOO_MANY_WORKERS:
+            fprintf(stderr, "MPQ_Init: Too many worker processes.\n");
+            return EXIT_FAILURE;
     }
 
-  cleanup_3:
     munmap(index->index_data, index->index_data_size);
     free(index);
 
-  cleanup_2:
+  cleanup_3:
 	munmap(data, data_size);
-	fclose(index_file);
+
+  cleanup_2:
+    if(index_file)
+    {
+        fclose(index_file);
+    }
 
   cleanup_1:
-	fclose(data_file);
+    if(data_file)
+    {
+        fclose(data_file);
+    }
 
-  cleanup:
-    if(mpq_status == MPQ_SUCCESS)
-        MPQ_Finalize();
-
-	if (exit_status == EXIT_SUCCESS && MPQ_rank == MPQ_MASTER)
-	{
-		ffindex_merge_splits(data_filename_out, index_filename_out, MPQ_size, 1);
-	}
 	return exit_status;
 }
