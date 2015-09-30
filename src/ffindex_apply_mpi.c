@@ -45,7 +45,7 @@ ffindex_apply_by_entry(char *data,
                        size_t * offset)
 {
 	int ret = 0;
-	int capture_stdout = (data_file_out != NULL);
+	int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
 
 	int pipefd_stdin[2];
 	ret = pipe(pipefd_stdin);
@@ -68,10 +68,11 @@ ffindex_apply_by_entry(char *data,
 		}
 	}
 
-	// Flush so child doesn't copy and also flushes, leading to duplicate
-	// output
-	fflush(data_file_out);
-	fflush(index_file_out);
+    // Flush so child doesn't copy and also flushes, leading to duplicate output
+    if (capture_stdout) {
+        fflush(data_file_out);
+        fflush(index_file_out);
+    }
 
 	pid_t child_pid = fork();
 
