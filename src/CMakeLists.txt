@@ -23,13 +23,12 @@ target_link_libraries (ffindex_apply ffindex)
 find_package(MPI)
 IF(MPI_FOUND)
   add_subdirectory(mpq)
-  add_subdirectory(gnu_getopt)
   add_executable(ffindex_apply_mpi
     ffindex_apply_mpi.c
   )
   set_property(TARGET ffindex_apply_mpi PROPERTY COMPILE_FLAGS ${MPI_LINK_FLAGS})
   target_include_directories(ffindex_apply_mpi PUBLIC ${MPI_INCLUDE_PATH})
-  target_link_libraries (ffindex_apply_mpi mpq gnu_getopt ${MPI_LIBRARIES} ffindex)
+  target_link_libraries (ffindex_apply_mpi mpq ${MPI_LIBRARIES} ffindex)
 	
 	INSTALL(PROGRAMS 
   	${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply_mpi

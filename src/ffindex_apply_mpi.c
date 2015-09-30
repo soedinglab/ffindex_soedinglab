@@ -27,14 +27,13 @@
 #include <fcntl.h>    // fcntl, F_*, O_*
 #include <signal.h>   // sigaction, sigemptyset
 
+#include <getopt.h>   // getopt_long
+
 #include <sys/queue.h> // SLIST_*
 
 #include "ffindex.h"
 #include "ffutil.h"
 #include "mpq/mpq.h"
-
-// Normalize BSD and GNU getopt
-#include "gnu_getopt/gnu_getopt.h"
 
 char read_buffer[400 * 1024 * 1024];
 
@@ -367,13 +366,13 @@ int ffindex_apply_worker_payload (const size_t start, const size_t end) {
 void usage()
 {
     fprintf(stderr,
-            "USAGE: ffindex_apply_mpi [-p PARTS] -d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
+            "USAGE: ffindex_apply_mpi [-p PARTS] [-d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT] DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
             "\nDesigned and implemented by Andy Hauser <hauser@genzentrum.lmu.de>\n"
             "and Milot Mirdita <milot@mirdita.de>.\n\n"
             "\t[-p PARTS]\t\tSets the effective split size for one batch to be computed for one worker.\n"
             "\t\tThe split size is computed with Total Number of Jobs / Number of Workers / PARTS.\n"
-            "\t-d DATA_FILENAME_OUT\tFFindex data file where the results will be saved to.\n"
-            "\t-i INDEX_FILENAME_OUT\tFFindex index file where the results will be saved to.\n"
+            "\t[-d DATA_FILENAME_OUT]\tFFindex data file where the results will be saved to.\n"
+            "\t[-i INDEX_FILENAME_OUT]\tFFindex index file where the results will be saved to.\n"
             "\tDATA_FILENAME\t\tInput ffindex data file.\n"
             "\tINDEX_FILENAME\t\tInput ffindex index file.\n"
             "\tPROGRAM [PROGRAM_ARGS]\tProgram to be executed for every ffindex entry.\n"
@@ -391,37 +390,69 @@ void ignore_signal(int signal)
 
 int main(int argn, char** argv)
 {
-	int exit_status = EXIT_SUCCESS;
-
     MPQ_Init(argn, argv);
+    int exit_status = EXIT_SUCCESS;
+    int mpq_status = MPQ_ERROR_UNKNOWN;
 
     int parts = 10;
-	char *data_filename_out = NULL, *index_filename_out = NULL;
+    char *data_filename_out  = NULL;
+    char *index_filename_out = NULL;
 
-	int opt;
-	while ((opt = gnu_getopt(argn, argv, "d:i:p::")) != -1)
+    static struct option long_options[] =
+    {
+        {"parts",   required_argument, NULL, 'p'},
+        {"data",    required_argument, NULL, 'd'},
+        {"index",   required_argument, NULL, 'i'},
+        {NULL,      0,                 NULL,  0 }
+    };
+
+    int opt;
+	while (1)
 	{
+        int option_index = 0;
+        opt = getopt_long(argn, argv, "p:d:i:", long_options, &option_index);
+        if(opt == -1)
+            break;
+
 		switch (opt)
 		{
-		case 'd':
-			data_filename_out = optarg;
-			break;
-		case 'i':
-			index_filename_out = optarg;
-			break;
-        case 'p':
-            parts = (int) optarg;
-            break;
+            case 'd':
+                data_filename_out = optarg;
+                break;
+            case 'i':
+                index_filename_out = optarg;
+                break;
+            case 'p':
+                parts = atoi(optarg);
+                break;
 		}
 	}
 
-	if (argn - optind < 3)
+    const int remaining_arguments = argn - optind;
+	if (remaining_arguments < 3)
 	{
-		fprintf(stderr, "Not enough arguments %d.\n\n", argn - optind);
+        if(remaining_arguments < 2)
+        {
+            fprintf(stderr, "Please specify input data and index file.\n\n");
+        }
+
+        fprintf(stderr, "Please specify program to execute.\n\n");
+
 		usage();
-		exit_status = EXIT_FAILURE;
+
+        exit_status = EXIT_FAILURE;
 		goto cleanup;
 	}
+
+    if ((!data_filename_out && index_filename_out) || (data_filename_out && !index_filename_out))
+    {
+        fprintf(stderr, "Please specify both output data and index file.\n\n");
+
+        usage();
+
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
+    }
 
 	char *data_filename = argv[optind++];
 	FILE *data_file = fopen(data_filename, "r");
