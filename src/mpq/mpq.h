@@ -5,9 +5,16 @@
 extern int MPQ_rank;
 extern int MPQ_size;
 
-void MPQ_Init (int argc, char** argv);
+enum {
+    MPQ_SUCCESS = 0,
+    MPQ_ERROR_NO_WORKERS,
+    MPQ_ERROR_TOO_MANY_WORKERS,
+    MPQ_ERROR_UNKNOWN
+};
 
-void MPQ_Main (const size_t num_jobs, const size_t split_size);
+int MPQ_Init (int argc, char** argv, const size_t num_jobs, const size_t split_size);
+
+void MPQ_Main ();
 
 void MPQ_Finalize ();
 

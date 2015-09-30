@@ -6,6 +6,8 @@
 
 int MPQ_size;
 int MPQ_rank;
+int MPQ_num_jobs;
+int MPQ_split_size;
 
 enum {
     TAG_JOB,
@@ -18,11 +20,27 @@ enum {
     MSG_RESULT
 };
 
-void MPQ_Init (int argc, char** argv)
+int MPQ_Init (int argc, char** argv, const size_t num_jobs, const size_t split_size)
 {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &MPQ_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &MPQ_size);
+
+    MPQ_num_jobs = num_jobs;
+    MPQ_split_size = split_size;
+
+    int workers = MPQ_size - 1;
+    if (workers < 1) {
+        MPI_Finalize();
+        return MPQ_ERROR_NO_WORKERS;
+    }
+
+    if (num_jobs < workers) {
+        MPI_Finalize();
+        return MPQ_ERROR_TOO_MANY_WORKERS;
+    }
+
+    return MPQ_SUCCESS;
 }
 
 void MPQ_Worker ()
@@ -43,7 +61,7 @@ void MPQ_Worker ()
     }
 }
 
-void MPQ_Master (const size_t num_jobs, const size_t split_size)
+void MPQ_Master ()
 {
     typedef struct idle_wokers_s idle_workers_t;
 
@@ -66,12 +84,12 @@ void MPQ_Master (const size_t num_jobs, const size_t split_size)
     MPI_Status status;
     int message[3];
 
-    size_t remaining_jobs = num_jobs;
+    size_t remaining_jobs = MPQ_num_jobs;
     size_t start_job = 0;
 
     while (remaining_jobs > 0 || !STAILQ_EMPTY(&idle_workers_head)) {
         if (remaining_jobs > 0 && !STAILQ_EMPTY(&idle_workers_head)) {
-            size_t batch_size = (remaining_jobs < split_size) ? remaining_jobs : split_size;
+            size_t batch_size = (remaining_jobs < MPQ_split_size) ? remaining_jobs : MPQ_split_size;
 
             message[0] = MSG_JOB;
             message[1] = start_job;
@@ -108,33 +126,35 @@ void MPQ_Master (const size_t num_jobs, const size_t split_size)
 
 }
 
-void MPQ_Main (const size_t num_jobs, const size_t split_size)
+void MPQ_Main ()
 {
     if (MPQ_rank != MPQ_MASTER) {
         MPQ_Worker();
         return;
     }
 
-    MPQ_Master(num_jobs, split_size);
+    MPQ_Master();
 }
 
-void MPQ_Release_Workers ()
+void MPQ_Release_Worker (const int worker_rank)
 {
     int message[3];
     message[0] = MSG_RELEASE;
     message[1] = 0;
     message[2] = 0;
-    for (int i = 1; i < MPQ_size; i++)
-    {
-        MPI_Send(message, 3, MPI_INT, i, TAG_JOB, MPI_COMM_WORLD);
-    }
+    MPI_Send(message, 3, MPI_INT, worker_rank, TAG_JOB, MPI_COMM_WORLD);
 }
 
 void MPQ_Finalize ()
 {
-    MPQ_Release_Workers();
+    if (MPQ_rank == MPQ_MASTER)
+    {
+        for (int i = 1; i < MPQ_size; i++)
+        {
+            MPQ_Release_Worker(i);
+        }
+    }
 
     MPI_Finalize();
-
     MPQ_Payload = NULL;
 }

@@ -391,7 +391,6 @@ void ignore_signal(int signal)
 
 int main(int argn, char** argv)
 {
-    MPQ_Init(argn, argv);
     int exit_status = EXIT_SUCCESS;
     int mpq_status = MPQ_ERROR_UNKNOWN;
 
@@ -490,6 +489,25 @@ int main(int argn, char** argv)
 	// Ignore SIGPIPE
 	ignore_signal(SIGPIPE);
 
+    // ceil div
+    int split_size = ((index->n_entries - 1) / ((MPQ_size - 1) * parts)) + 1;
+    mpq_status = MPQ_Init(argn, argv, index->n_entries, (split_size > 1 ? split_size : 1));
+
+    switch (mpq_status) {
+        case MPQ_ERROR_NO_WORKERS:
+            fprintf(stderr, "MPQ_Init: Needs at least one worker process.\n");
+            exit_status = EXIT_FAILURE;
+            goto cleanup_3;
+        case MPQ_ERROR_TOO_MANY_WORKERS:
+            fprintf(stderr, "MPQ_Init: Too many worker processes.\n");
+            exit_status = EXIT_FAILURE;
+            goto cleanup_3;
+        case MPQ_SUCCESS:
+        default:
+            break;
+    }
+
+
     if (MPQ_rank != MPQ_MASTER) {
         SLIST_INIT(&worker_splits_head);
     }
@@ -503,9 +521,7 @@ int main(int argn, char** argv)
 
     MPQ_Payload = ffindex_apply_worker_payload;
 
-    // ceil div
-    int split_size = ((index->n_entries - 1) / ((MPQ_size - 1) * parts)) + 1;
-    MPQ_Main(index->n_entries, (split_size > 1 ? split_size : 1));
+    MPQ_Main();
 
     if (MPQ_rank != MPQ_MASTER) {
         ffindex_worker_merge_splits(data_filename_out, index_filename_out, MPQ_rank, 1);
@@ -517,6 +533,7 @@ int main(int argn, char** argv)
         }
     }
 
+  cleanup_3:
     munmap(index->index_data, index->index_data_size);
     free(index);
 
@@ -528,7 +545,8 @@ int main(int argn, char** argv)
 	fclose(data_file);
 
   cleanup:
-    MPQ_Finalize();
+    if(mpq_status == MPQ_SUCCESS)
+        MPQ_Finalize();
 
 	if (exit_status == EXIT_SUCCESS && MPQ_rank == MPQ_MASTER)
 	{
