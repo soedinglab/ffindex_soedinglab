@@ -44,7 +44,7 @@ ffindex_apply_by_entry(char *data,
                        ffindex_index_t * index, ffindex_entry_t * entry,
                        char *program_name, char **program_argv,
                        FILE * data_file_out, FILE * index_file_out,
-                       size_t * offset)
+                       size_t * offset, int quiet)
 {
 	int ret = 0;
 	int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
@@ -195,7 +195,7 @@ ffindex_apply_by_entry(char *data,
 
 		int status;
 		waitpid(child_pid, &status, 0);
-		if (WIFEXITED(status))
+		if (WIFEXITED(status) && quiet == 0)
 		{
 			fprintf(stdout, "%s\t%zd\t%zd\t%i\n",
                     entry->name, entry->offset, entry->length, WEXITSTATUS(status));
@@ -230,6 +230,7 @@ struct ffindex_apply_mpi_data_s {
     char*  index_filename_out;
     char*  program_name;
     char** program_argv;
+    int    quiet;
 } ffindex_payload_environment;
 
 int ffindex_apply_worker_payload (const size_t start, const size_t end) {
@@ -278,7 +279,7 @@ int ffindex_apply_worker_payload (const size_t start, const size_t end) {
         int error = ffindex_apply_by_entry(ffindex_payload_environment.data, ffindex_payload_environment.index, entry,
                                            ffindex_payload_environment.program_name,
                                            ffindex_payload_environment.program_argv, data_file_out,
-                                           index_file_out, &offset);
+                                           index_file_out, &offset, ffindex_payload_environment.quiet);
         if (error != 0)
         {
             perror(entry->name);
@@ -435,6 +436,7 @@ void usage()
             "\t\tThe split size is computed with Total Number of Jobs / Number of Workers / PARTS.\n"
             "\t[-d DATA_FILENAME_OUT]\tFFindex data file where the results will be saved to.\n"
             "\t[-i INDEX_FILENAME_OUT]\tFFindex index file where the results will be saved to.\n"
+            "\t[-q]\tSilence the logging of every processed entry.\n"
             "\tDATA_FILENAME\t\tInput ffindex data file.\n"
             "\tINDEX_FILENAME\t\tInput ffindex index file.\n"
             "\tPROGRAM [PROGRAM_ARGS]\tProgram to be executed for every ffindex entry.\n"
@@ -448,6 +450,7 @@ int main(int argn, char** argv)
     int exit_status = EXIT_SUCCESS;
 
     int parts = 10;
+    int quiet = 0;
     char *data_filename_out  = NULL;
     char *index_filename_out = NULL;
 
@@ -456,6 +459,7 @@ int main(int argn, char** argv)
         {"parts",   required_argument, NULL, 'p'},
         {"data",    required_argument, NULL, 'd'},
         {"index",   required_argument, NULL, 'i'},
+        {"quiet",   no_argument,       NULL, 'q'},
         {NULL,      0,                 NULL,  0 }
     };
 
@@ -463,7 +467,7 @@ int main(int argn, char** argv)
 	while (1)
 	{
         int option_index = 0;
-        opt = getopt_long(argn, argv, "p:d:i:", long_options, &option_index);
+        opt = getopt_long(argn, argv, "qp:d:i:", long_options, &option_index);
         if(opt == -1)
             break;
 
@@ -477,6 +481,9 @@ int main(int argn, char** argv)
                 break;
             case 'p':
                 parts = atoi(optarg);
+                break;
+            case 'q':
+                quiet = 1;
                 break;
 		}
 	}
@@ -548,6 +555,7 @@ int main(int argn, char** argv)
     ffindex_payload_environment.program_argv = program_argv;
     ffindex_payload_environment.data_filename_out = data_filename_out;
     ffindex_payload_environment.index_filename_out = index_filename_out;
+    ffindex_payload_environment.quiet = quiet;
 
     int mpq_status = process_queue(argn, argv, parts);
     switch (mpq_status) {
