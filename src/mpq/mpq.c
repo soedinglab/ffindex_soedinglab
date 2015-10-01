@@ -11,7 +11,7 @@ int MPQ_is_init = 0;
 
 enum {
     TAG_JOB,
-    TAG_RESULT
+    TAG_DONE
 };
 
 enum {
@@ -62,7 +62,7 @@ void MPQ_Worker ()
         message[1] = 0;
         message[2] = 0;
 
-        MPI_Send(message, 3, MPI_INT, MPQ_MASTER, TAG_RESULT, MPI_COMM_WORLD);
+        MPI_Send(message, 3, MPI_INT, MPQ_MASTER, TAG_DONE, MPI_COMM_WORLD);
     }
 }
 
@@ -109,7 +109,7 @@ void MPQ_Master (const size_t split_size)
             STAILQ_REMOVE_HEAD(&idle_workers_head, entries);
             free(idle_worker);
         } else {
-            MPI_Recv(message, 3, MPI_INT, MPI_ANY_SOURCE, TAG_RESULT, MPI_COMM_WORLD, &status);
+            MPI_Recv(message, 3, MPI_INT, MPI_ANY_SOURCE, TAG_DONE, MPI_COMM_WORLD, &status);
             switch (message[0]) {
                 default:
                 case MSG_DONE: {
