@@ -20,9 +20,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <ctype.h>
 
+#include <getopt.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
@@ -41,9 +41,22 @@ void usage(char *program_name)
 int main(int argn, char **argv)
 {
   int sort = 0, version = 0;
-  int opt, err = EXIT_SUCCESS;
-  while ((opt = getopt(argn, argv, "sv")) != -1)
+  int err = EXIT_SUCCESS;
+  static struct option long_options[] =
   {
+    { "sort",    no_argument, NULL, 's' },
+    { "version", no_argument, NULL, 'v' },
+    { NULL,      0,           NULL,  0  }
+  };
+
+  int opt;
+  while (1)
+  {
+    int option_index = 0;
+    opt = getopt_long(argn, argv, "sv", long_options, &option_index);
+    if (opt == -1)
+      break;
+
     switch (opt)
     {
       case 's':

@@ -20,8 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <unistd.h>
 
+#include <getopt.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
@@ -43,11 +43,28 @@ void usage(char *program_name)
 int main(int argn, char **argv)
 {
   int sort = 0, unlink = 0, version = 0, use_tree = 1;
-  int opt, err = EXIT_SUCCESS;
+  int err = EXIT_SUCCESS;
   char* list_filenames[MAX_FILENAME_LIST_FILES];
   size_t list_filenames_index = 0;
-  while ((opt = getopt(argn, argv, "stuvf:")) != -1)
+
+  static struct option long_options[] =
   {
+    { "file",    required_argument, NULL, 'f' },
+    { "sort",    no_argument, NULL, 's' },
+    { "tree",    no_argument, NULL, 't' },
+    { "unlink",  no_argument, NULL, 'u' },
+    { "version", no_argument, NULL, 'v' },
+    { NULL,      0,           NULL,  0  }
+  };
+
+  int opt;
+  while (1)
+  {
+    int option_index = 0;
+    opt = getopt_long(argn, argv, "stuvf:", long_options, &option_index);
+    if (opt == -1)
+      break;  
+
     switch (opt)
     {
       case 'f':
@@ -66,7 +83,6 @@ int main(int argn, char **argv)
         version = 1;
         break;
       default:
-        fprintf(stderr, "Option %c not recognized\n", opt);
         usage(argv[0]);
         return EXIT_FAILURE;
     }

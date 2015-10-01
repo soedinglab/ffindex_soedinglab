@@ -20,14 +20,13 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
+#include <getopt.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
 
 #define MAX_FILENAME_LIST_FILES 4096
-
 
 void usage(char *program_name)
 {
@@ -55,18 +54,36 @@ void usage(char *program_name)
                     program_name, MAX_FILENAME_LIST_FILES, FFINDEX_MAX_ENTRY_NAME_LENTH, FFINDEX_MAX_INDEX_ENTRIES_DEFAULT);
 }
 
-int main(int argn, char **argv)
+int main(int argn, char** argv)
 {
-  int append = 0, sort = 0, unlink = 0, version = 0;
-  int opt, err = EXIT_SUCCESS;
+  int append = 0, sort = 0, version = 0;
+  int err = EXIT_SUCCESS;
   char* list_filenames[MAX_FILENAME_LIST_FILES];
   char* list_ffindex_data[MAX_FILENAME_LIST_FILES];
   char* list_ffindex_index[MAX_FILENAME_LIST_FILES];
   size_t list_ffindex_data_index = 0;
   size_t list_ffindex_index_index = 0;
   size_t list_filenames_index = 0;
-  while ((opt = getopt(argn, argv, "asuvd:f:i:")) != -1)
+
+  static struct option long_options[] =
   {
+    { "append",  no_argument, NULL, 'a' },
+    { "data",    required_argument, NULL, 'd' },
+    { "index",   required_argument, NULL, 'i' },
+    { "file",    required_argument, NULL, 'f' },
+    { "sort",    no_argument, NULL, 's' },
+    { "version", no_argument, NULL, 'v' },
+    { NULL,      0,           NULL,  0  }
+  };
+
+  int opt;
+  while (1)
+  {
+    int option_index = 0;
+    opt = getopt_long(argn, argv, "ad:i:f:sv", long_options, &option_index);
+    if (opt == -1)
+      break;
+
     switch (opt)
     {
       case 'a':
@@ -103,12 +120,6 @@ int main(int argn, char **argv)
   if(argn - optind < 2)
   {
     usage(argv[0]);
-    return EXIT_FAILURE;
-  }
-
-  if(append && unlink)
-  {
-    fprintf(stderr, "ERROR: append (-a) and unlink (-u) are mutually exclusive\n");
     return EXIT_FAILURE;
   }
 
