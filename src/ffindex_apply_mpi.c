@@ -10,7 +10,7 @@
  * See:
  * http://creativecommons.org/licenses/by-sa/3.0/
  *
- * ffindex_apply
+ * ffindex_apply_mpi
  * apply a program to each FFindex entry
  */
 
@@ -31,6 +31,8 @@
 
 #include <sys/queue.h> // SLIST_*
 
+#include <spawn.h>     // spawn_*
+
 #include <assert.h>    // assert
 
 #include "ffindex.h"
@@ -38,178 +40,154 @@
 #include "mpq/mpq.h"
 
 char read_buffer[400 * 1024 * 1024];
+extern char **environ;
 
 int
 ffindex_apply_by_entry(char *data,
-                       ffindex_index_t * index, ffindex_entry_t * entry,
-                       char *program_name, char **program_argv,
-                       FILE * data_file_out, FILE * index_file_out,
-                       size_t * offset, int quiet)
+                       ffindex_index_t* index, ffindex_entry_t* entry,
+                       char* program_name, char** program_argv,
+                       FILE* data_file_out, FILE* index_file_out,
+                       size_t* offset, int quiet)
 {
-	int ret = 0;
-	int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
+    int ret = 0;
+    int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
 
-	int pipefd_stdin[2];
-	ret = pipe(pipefd_stdin);
-	if (ret != 0)
-	{
-		fprintf(stderr, "ERROR in pipe stdin!\n");
-		perror(entry->name);
-		return errno;
-	}
+    int pipefd_stdin[2];
+    int pipefd_stdout[2];
 
-	int pipefd_stdout[2];
-	if (capture_stdout)
-	{
-		ret = pipe(pipefd_stdout);
-		if (ret != 0)
-		{
-			fprintf(stderr, "ERROR in pipe stdout!\n");
-			perror(entry->name);
-			return errno;
-		}
-	}
+    ret = pipe(pipefd_stdin);
+    if (ret != 0)
+    {
+        fprintf(stderr, "ERROR in pipe stdin!\n");
+        perror(entry->name);
+        return errno;
+    }
 
-    // Flush so child doesn't copy and also flushes, leading to duplicate output
-    if (capture_stdout) {
+    if (capture_stdout)
+    {
+        ret = pipe(pipefd_stdout);
+        if (ret != 0)
+        {
+            fprintf(stderr, "ERROR in pipe stdout!\n");
+            perror(entry->name);
+            return errno;
+        }
+
+        // Flush so child doesn't copy and also flushes, leading to duplicate output
         fflush(data_file_out);
         fflush(index_file_out);
     }
 
-	pid_t child_pid = fork();
+    posix_spawn_file_actions_t factions;
+    posix_spawn_file_actions_init(&factions);
+    posix_spawn_file_actions_addclose(&factions, pipefd_stdin[1]);
+    posix_spawn_file_actions_adddup2(&factions, pipefd_stdin[0], fileno(stdin));
+    if (capture_stdout) {
+        posix_spawn_file_actions_addclose(&factions, pipefd_stdout[0]);
+        posix_spawn_file_actions_adddup2(&factions, pipefd_stdout[1], fileno(stdout));
+    }
 
-	if (child_pid == 0)			// child
-	{
-		close(pipefd_stdin[1]);
-		if (capture_stdout)
-		{
-			fclose(data_file_out);
-			fclose(index_file_out);
-			close(pipefd_stdout[0]);
-		}
-		// Make pipe from parent our new stdin
-		int newfd_in = dup2(pipefd_stdin[0], fileno(stdin));
-		if (newfd_in < 0)
-		{
-			fprintf(stderr, "ERROR in dup2 in %d %d\n", pipefd_stdin[0], newfd_in);
-			perror(entry->name);
-		}
-		close(pipefd_stdin[0]);
+    short flags = 0;
+    posix_spawnattr_t attr;
+    posix_spawnattr_init(&attr);
+#ifdef POSIX_SPAWN_USEVFORK
+    flags |= POSIX_SPAWN_USEVFORK;
+#endif
+    posix_spawnattr_setflags(&attr, flags);
 
-		if (capture_stdout)
-		{
-			int newfd_out = dup2(pipefd_stdout[1], fileno(stdout));
-			if (newfd_out < 0)
-			{
-				fprintf(stderr, "ERROR in dup2 out %d %d\n", pipefd_stdout[1], newfd_out);
-				perror(entry->name);
-			}
-			close(pipefd_stdout[1]);
-		}
-		// exec program with the pipe as stdin
-		ret = execvp(program_name, program_argv);
+    pid_t child_pid;
+    int err = posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ);
+    if (err)
+    {
+        fprintf(stderr, "ERROR in fork()\n");
+        perror(entry->name);
+        return errno;
+    }
+    else
+    {
+        // parent writes to and possible reads from child
+        int flags = 0;
 
-		// never reached on success of execvp
-		if (ret == -1)
-		{
-			perror(program_name);
-			return errno;
-		}
-	}
-	else if (child_pid > 0)		// parent
-	{
-		// parent writes to and possible reads from child
+        // Read end is for child only
+        close(pipefd_stdin[0]);
 
-		int flags = 0;
+        if (capture_stdout)
+        {
+            close(pipefd_stdout[1]);
+        }
 
-		// Read end is for child only
-		close(pipefd_stdin[0]);
+        char *file_data = ffindex_get_data_by_entry(data, entry);
 
-		if (capture_stdout)
-		{
-			close(pipefd_stdout[1]);
+        if (capture_stdout)
+        {
+            flags = fcntl(pipefd_stdout[0], F_GETFL, 0);
+            fcntl(pipefd_stdout[0], F_SETFL, flags | O_NONBLOCK);
+        }
 
-			flags = fcntl(pipefd_stdout[0], F_GETFL, 0);
-			fcntl(pipefd_stdout[0], F_SETFL, flags | O_NONBLOCK);
-		}
+        char *b = read_buffer;
 
-		char *filedata = ffindex_get_data_by_entry(data, entry);
+        // Write file data to child's stdin.
+        ssize_t written = 0;
+        // Don't write ffindex trailing '\0'
+        size_t to_write = entry->length - 1;
+        while (written < to_write)
+        {
+            size_t rest = to_write - written;
+            int batch_size = PIPE_BUF;
+            if (rest < PIPE_BUF)
+            {
+                batch_size = rest;
+            }
 
-		// Write file data to child's stdin.
-		ssize_t written = 0;
-		size_t to_write = entry->length - 1;	// Don't write ffindex
-		// trailing '\0'
-		char *b = read_buffer;
-		while (written < to_write)
-		{
-			size_t rest = to_write - written;
-			int batch_size = PIPE_BUF;
-			if (rest < PIPE_BUF)
-			{
-				batch_size = rest;
-			}
+            ssize_t w = write(pipefd_stdin[1], file_data + written, batch_size);
+            if (w < 0 && errno != EPIPE)
+            {
+                fprintf(stderr, "ERROR in child!\n");
+                perror(entry->name);
+                break;
+            }
+            else
+            {
+                written += w;
+            }
 
-			ssize_t w = write(pipefd_stdin[1], filedata + written,
-							  batch_size);
-			if (w < 0 && errno != EPIPE)
-			{
-				fprintf(stderr, "ERROR in child!\n");
-				perror(entry->name);
-				break;
-			}
-			else
-			{
-				written += w;
-			}
+            if (capture_stdout)
+            {
+                // To avoid blocking try to read some data
+                ssize_t r = read(pipefd_stdout[0], b, PIPE_BUF);
+                if (r > 0)
+                {
+                    b += r;
+                }
+            }
+        }
+        close(pipefd_stdin[1]); // child gets EOF
 
-			if (capture_stdout)
-			{
-				// To avoid blocking try to read some data
-				ssize_t r = read(pipefd_stdout[0], b, PIPE_BUF);
-				if (r > 0)
-				{
-					b += r;
-				}
-			}
-		}
-		close(pipefd_stdin[1]);	// child gets EOF
+        if (capture_stdout)
+        {
+            // Read rest
+            fcntl(pipefd_stdout[0], F_SETFL, flags); // Remove O_NONBLOCK
+            ssize_t r;
+            while ((r = read(pipefd_stdout[0], b, PIPE_BUF)) > 0)
+            {
+                b += r;
+            }
+            close(pipefd_stdout[0]);
 
-		if (capture_stdout)
-		{
-			// Read rest
-			fcntl(pipefd_stdout[0], F_SETFL, flags);	// Remove O_NONBLOCK
-			ssize_t r;
-			while ((r = read(pipefd_stdout[0], b, PIPE_BUF)) > 0)
-			{
-				b += r;
-			}
-			close(pipefd_stdout[0]);
+            ffindex_insert_memory(data_file_out, index_file_out, offset, read_buffer, b - read_buffer, entry->name);
+        }
 
-			ffindex_insert_memory(data_file_out, index_file_out,
-                                  offset, read_buffer, b - read_buffer, entry->name);
+        int status;
+        waitpid(child_pid, &status, 0);
+        if (!quiet)
+        {
+            fprintf(stdout, "%s\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, WEXITSTATUS(status));
+        }
+    }
 
-			// make sure the data is actually written so ffindex_build sees the output
-			fflush(data_file_out);
-			fflush(index_file_out);
-		}
-
-		int status;
-		waitpid(child_pid, &status, 0);
-		if (WIFEXITED(status) && quiet == 0)
-		{
-			fprintf(stdout, "%s\t%zd\t%zd\t%i\n",
-                    entry->name, entry->offset, entry->length, WEXITSTATUS(status));
-		}
-	}
-    // fork failed
-	else
-	{
-		fprintf(stderr, "ERROR in fork()\n");
-		perror(entry->name);
-		return errno;
-	}
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
+
 
 typedef struct worker_splits_s worker_splits_t;
 
@@ -231,7 +209,9 @@ struct ffindex_apply_mpi_data_s {
     char*  program_name;
     char** program_argv;
     int    quiet;
-} ffindex_payload_environment;
+};
+
+ffindex_apply_mpi_data_t ffindex_payload_environment;
 
 int ffindex_apply_worker_payload (const size_t start, const size_t end) {
     FILE *data_file_out = NULL;
