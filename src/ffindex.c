@@ -268,6 +268,7 @@ ffindex_entry_t* ffindex_get_entry_by_name(ffindex_index_t *index, char *name)
 {
   if(index != NULL) {
 	return ffindex_bsearch_get_entry(index, name);
+  }
   else {
 	return NULL;
   }
