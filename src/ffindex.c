@@ -266,7 +266,11 @@ static int ffindex_compare_entries_by_name(const void *pentry1, const void *pent
 
 ffindex_entry_t* ffindex_get_entry_by_name(ffindex_index_t *index, char *name)
 {
-  return ffindex_bsearch_get_entry(index, name);
+  if(index != NULL) {
+	return ffindex_bsearch_get_entry(index, name);
+  else {
+	return NULL;
+  }
 }
 
 ffindex_entry_t* ffindex_bsearch_get_entry(ffindex_index_t *index, char *name)
@@ -329,7 +333,7 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
 
 ffindex_entry_t* ffindex_get_entry_by_index(ffindex_index_t *index, size_t entry_index)
 {
-  if(entry_index < index->n_entries)
+  if(index != NULL && entry_index < index->n_entries)
     return &index->entries[entry_index];
   else
     return NULL;
