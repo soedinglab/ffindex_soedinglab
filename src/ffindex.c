@@ -84,12 +84,11 @@ int ffindex_index_open(char *data_filename, char *index_filename, char* mode, FI
 
 int ffindex_insert_ffindex(FILE* data_file, FILE* index_file, size_t* offset, char* data_to_add, ffindex_index_t* index_to_add)
 {
-  int err = EXIT_SUCCESS;
   for(size_t entry_i = 0; entry_i < index_to_add->n_entries; entry_i++)
   {
     ffindex_entry_t *entry = ffindex_get_entry_by_index(index_to_add, entry_i);
     if(entry == NULL) { fferror_print(__FILE__, __LINE__, __func__, ""); return EXIT_FAILURE; }
-    err = ffindex_insert_memory(data_file, index_file, offset, ffindex_get_data_by_entry(data_to_add, entry), entry->length - 1, entry->name); // skip \0 suffix
+    int err = ffindex_insert_memory(data_file, index_file, offset, ffindex_get_data_by_entry(data_to_add, entry), entry->length - 1, entry->name); // skip \0 suffix
     if(err != EXIT_SUCCESS) { fferror_print(__FILE__, __LINE__, __func__, ""); return EXIT_FAILURE;}
   }
   return EXIT_SUCCESS;
@@ -303,7 +302,7 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
   }
 
   index->type = SORTED_ARRAY; /* XXX Assume a sorted file for now */
-  int i = 0;
+  size_t i = 0;
   char* d = index->index_data;
   char* end;
   /* Faster than scanf per line */
@@ -313,9 +312,9 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
     for(p = 0; *d != '\t'; d++)
       index->entries[i].name[p++] = *d;
     index->entries[i].name[p] = '\0';
-    index->entries[i].offset = strtol(d, &end, 10);
+    index->entries[i].offset = strtoull(d, &end, 10);
     d = end;
-    index->entries[i].length  = strtol(d, &end, 10);
+    index->entries[i].length  = strtoull(d, &end, 10);
     d = end + 1; /* +1 for newline */
   }
 
@@ -414,7 +413,7 @@ int ffindex_write(ffindex_index_t* index, FILE* index_file)
 
 ffindex_index_t* ffindex_unlink_entries(ffindex_index_t* index, char** sorted_names_to_unlink, int n_names)
 {
-  int i = index->n_entries - 1;
+  size_t i = index->n_entries - 1;
   /* walk list of names to delete */
   for(int n = n_names - 1; n >= 0;  n--)
   {
