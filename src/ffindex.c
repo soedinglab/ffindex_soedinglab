@@ -424,7 +424,7 @@ ffindex_index_t* ffindex_unlink_entries(ffindex_index_t* index, char** sorted_na
   {
     char* name_to_unlink = sorted_names_to_unlink[n];
     /* walk index entries */
-    for(; i >= 0; i--)
+    for(; i-- > 0;)
     {
       int cmp = strncmp(name_to_unlink, index->entries[i].name, FFINDEX_MAX_ENTRY_NAME_LENTH);
       if(cmp == 0) /* found entry */
