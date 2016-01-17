@@ -10,6 +10,9 @@ which basically captures the spirit of the Gnu Public License (GPL).
 See:
 http://creativecommons.org/licenses/by-sa/3.0/
 
+* Continuous Integeration
+[ ![Codeship Status for soedinglab/ffindex](https://codeship.com/projects/6c26cd00-2247-0133-1269-52bb0fef976f/status?branch=master)](https://codeship.com/projects/96084)
+
 * Thanks
 
 Thanks to Laszlo Kajan for creating and maintaining Debian packages

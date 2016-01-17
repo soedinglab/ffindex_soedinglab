@@ -20,7 +20,7 @@ add_executable(ffindex_apply
 target_link_libraries (ffindex_apply ffindex)
 
 
-find_package(MPI QUIET)
+find_package(MPI)
 IF(MPI_FOUND)
 IF(HAVE_MPI)
   add_subdirectory(mpq)
@@ -29,7 +29,7 @@ IF(HAVE_MPI)
   )
   set_property(TARGET ffindex_apply_mpi PROPERTY COMPILE_FLAGS ${MPI_LINK_FLAGS})
   target_include_directories(ffindex_apply_mpi PUBLIC ${MPI_INCLUDE_PATH})
-  target_link_libraries (ffindex_apply_mpi ${MPI_LIBRARIES} ffindex)
+  target_link_libraries (ffindex_apply_mpi mpq ${MPI_LIBRARIES} ffindex)
 	
 	INSTALL(PROGRAMS 
   	${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply_mpi
@@ -69,10 +69,10 @@ add_executable(ffindex_unpack
 target_link_libraries (ffindex_unpack ffindex)
 
 
-add_executable(ffindex_sort
-  ffindex_sort.c
+add_executable(ffindex_order
+  ffindex_order.c
 )
-target_link_libraries (ffindex_sort ffindex)
+target_link_libraries (ffindex_order ffindex)
 
 
 install(PROGRAMS 
@@ -86,10 +86,12 @@ install(TARGETS ffindex
 	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
 
-#ugly workaround
-install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/libffindex_shared.so
-	DESTINATION lib64 RENAME libffindex.so
+
+install(TARGETS ffindex_shared
+  LIBRARY DESTINATION lib64 COMPONENT libraries
+	ARCHIVE DESTINATION lib64 COMPONENT libraries
 )
+
 
 INSTALL(PROGRAMS 
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply
@@ -98,5 +100,6 @@ INSTALL(PROGRAMS
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_get
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_modify
   ${CMAKE_CURRENT_BINARY_DIR}/ffindex_unpack
+  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_order
   DESTINATION bin
 )

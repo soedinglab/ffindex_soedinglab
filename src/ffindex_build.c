@@ -20,14 +20,13 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
+#include <getopt.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
 
 #define MAX_FILENAME_LIST_FILES 4096
-
 
 void usage(char *program_name)
 {
@@ -55,18 +54,36 @@ void usage(char *program_name)
                     program_name, MAX_FILENAME_LIST_FILES, FFINDEX_MAX_ENTRY_NAME_LENTH, FFINDEX_MAX_INDEX_ENTRIES_DEFAULT);
 }
 
-int main(int argn, char **argv)
+int main(int argn, char** argv)
 {
-  int append = 0, sort = 0, unlink = 0, version = 0;
-  int opt, err = EXIT_SUCCESS;
+  int append = 0, sort = 0, version = 0;
+  int err = EXIT_SUCCESS;
   char* list_filenames[MAX_FILENAME_LIST_FILES];
   char* list_ffindex_data[MAX_FILENAME_LIST_FILES];
   char* list_ffindex_index[MAX_FILENAME_LIST_FILES];
   size_t list_ffindex_data_index = 0;
   size_t list_ffindex_index_index = 0;
   size_t list_filenames_index = 0;
-  while ((opt = getopt(argn, argv, "asuvd:f:i:")) != -1)
+
+  static struct option long_options[] =
   {
+    { "append",  no_argument, NULL, 'a' },
+    { "data",    required_argument, NULL, 'd' },
+    { "index",   required_argument, NULL, 'i' },
+    { "file",    required_argument, NULL, 'f' },
+    { "sort",    no_argument, NULL, 's' },
+    { "version", no_argument, NULL, 'v' },
+    { NULL,      0,           NULL,  0  }
+  };
+
+  int opt;
+  while (1)
+  {
+    int option_index = 0;
+    opt = getopt_long(argn, argv, "ad:i:f:sv", long_options, &option_index);
+    if (opt == -1)
+      break;
+
     switch (opt)
     {
       case 'a':
@@ -103,12 +120,6 @@ int main(int argn, char **argv)
   if(argn - optind < 2)
   {
     usage(argv[0]);
-    return EXIT_FAILURE;
-  }
-
-  if(append && unlink)
-  {
-    fprintf(stderr, "ERROR: append (-a) and unlink (-u) are mutually exclusive\n");
     return EXIT_FAILURE;
   }
 
@@ -175,6 +186,17 @@ int main(int argn, char **argv)
     {
       FILE* data_file_to_add  = fopen(list_ffindex_data[i], "r");  if(  data_file_to_add == NULL) { perror(list_ffindex_data[i]); return EXIT_FAILURE; }
       FILE* index_file_to_add = fopen(list_ffindex_index[i], "r"); if( index_file_to_add == NULL) { perror(list_ffindex_index[i]); return EXIT_FAILURE; }
+
+      // ignore empty files
+      struct stat sb;
+      fstat(fileno(data_file_to_add), &sb);
+      if(sb.st_size == 0)
+          continue;
+
+      fstat(fileno(index_file_to_add), &sb);
+      if(sb.st_size == 0)
+          continue;
+
       size_t data_size;
       char *data_to_add = ffindex_mmap_data(data_file_to_add, &data_size);
       ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add, 0);
@@ -213,7 +235,8 @@ int main(int argn, char **argv)
   /* Sort the index entries and write back */
   if(sort)
   {
-    rewind(index_file);
+    fclose(index_file);
+    index_file = fopen(index_filename, "r+");
     ffindex_index_t* index = ffindex_index_parse(index_file, 0);
     if(index == NULL)
     {

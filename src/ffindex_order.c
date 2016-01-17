@@ -1,5 +1,5 @@
 /*
- * ffindex_sort
+ * ffindex_order
  * written by Milot Mirdita <milot@mirdita.de>.
  * Please add your name here if you distribute modified versions.
  * 
@@ -9,10 +9,10 @@
  * See:
  * http://creativecommons.org/licenses/by-sa/3.0/
  *
- * ffindex_sort
- * Sort an FFindex data file by the order given by file
+ * ffindex_order
+ * Reorders the entries in a FFindex data file by the order given by file
  * Each line of the order file must contain a key from the FFindex index.
- * The FFindex data file will have the same order as the order file.
+ * The FFindex data file entries will have the same order as the order file.
 */
 
 #define _GNU_SOURCE 1
@@ -24,7 +24,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
-
 
 #include "ffindex.h"
 #include "ffutil.h"
@@ -87,10 +86,14 @@ int main(int argc, char **argv)
     }
 
     // remove new line
-    char *entry = ffnchomp(line, len);  
-    char *filedata = ffindex_get_data_by_name(data, index, entry);
+    char *name = ffnchomp(line, len);
+    ffindex_entry_t* entry = ffindex_get_entry_by_name(index, name);
 
-    ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, strlen(filedata), entry);
+    if (entry != NULL) {
+      char* filedata = ffindex_get_data_by_entry(data, entry);
+      size_t entryLength = (entry->length == 0 ) ? 0 : entry->length - 1;
+      ffindex_insert_memory(sorted_data_file, sorted_index_file, &offset, filedata, entryLength, name);
+    }
 
     i++;
   }
@@ -102,7 +105,8 @@ int main(int argc, char **argv)
   fclose(order_file);
 
   // sort FFindex index
-  rewind(sorted_index_file);
+  fclose(sorted_index_file);
+  sorted_index_file = fopen(sorted_index_filename, "r+");
   index = ffindex_index_parse(sorted_index_file, 0);
   if(index == NULL)  {   
     perror("ffindex_index_parse failed");

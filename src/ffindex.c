@@ -14,6 +14,9 @@
 #define _LARGEFILE64_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 
+#include "ffindex.h"
+#include "ffutil.h"
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -28,10 +31,7 @@
 #include <unistd.h>
 
 #include "ext/fmemopen.h" /* For OS not yet implementing this new standard function */
-#include "ffutil.h"
-#include "ffindex.h"
 #include "twalkmisc.h"
-
 
 /* XXX Use page size? */
 #define FFINDEX_BUFFER_SIZE 4096
@@ -84,12 +84,11 @@ int ffindex_index_open(char *data_filename, char *index_filename, char* mode, FI
 
 int ffindex_insert_ffindex(FILE* data_file, FILE* index_file, size_t* offset, char* data_to_add, ffindex_index_t* index_to_add)
 {
-  int err = EXIT_SUCCESS;
   for(size_t entry_i = 0; entry_i < index_to_add->n_entries; entry_i++)
   {
     ffindex_entry_t *entry = ffindex_get_entry_by_index(index_to_add, entry_i);
     if(entry == NULL) { fferror_print(__FILE__, __LINE__, __func__, ""); return EXIT_FAILURE; }
-    err = ffindex_insert_memory(data_file, index_file, offset, ffindex_get_data_by_entry(data_to_add, entry), entry->length - 1, entry->name); // skip \0 suffix
+    int err = ffindex_insert_memory(data_file, index_file, offset, ffindex_get_data_by_entry(data_to_add, entry), entry->length - 1, entry->name); // skip \0 suffix
     if(err != EXIT_SUCCESS) { fferror_print(__FILE__, __LINE__, __func__, ""); return EXIT_FAILURE;}
   }
   return EXIT_SUCCESS;
@@ -266,7 +265,12 @@ static int ffindex_compare_entries_by_name(const void *pentry1, const void *pent
 
 ffindex_entry_t* ffindex_get_entry_by_name(ffindex_index_t *index, char *name)
 {
-  return ffindex_bsearch_get_entry(index, name);
+  if(index != NULL) {
+	return ffindex_bsearch_get_entry(index, name);
+  }
+  else {
+	return NULL;
+  }
 }
 
 ffindex_entry_t* ffindex_bsearch_get_entry(ffindex_index_t *index, char *name)
@@ -294,11 +298,16 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
   index->file = index_file;
   index->index_data = ffindex_mmap_data(index_file, &(index->index_data_size));
   if(index->index_data_size == 0)
-    warn("Problem with data file. Is it empty or is another process readning it?");
+    warn("Problem with data file. Is the file empty or is another process reading it?");
+  
   if(index->index_data == MAP_FAILED)
+  {
+    free(index);
     return NULL;
+  }
+
   index->type = SORTED_ARRAY; /* XXX Assume a sorted file for now */
-  int i = 0;
+  size_t i = 0;
   char* d = index->index_data;
   char* end;
   /* Faster than scanf per line */
@@ -308,9 +317,9 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
     for(p = 0; *d != '\t'; d++)
       index->entries[i].name[p++] = *d;
     index->entries[i].name[p] = '\0';
-    index->entries[i].offset = strtol(d, &end, 10);
+    index->entries[i].offset = strtoull(d, &end, 10);
     d = end;
-    index->entries[i].length  = strtol(d, &end, 10);
+    index->entries[i].length  = strtoull(d, &end, 10);
     d = end + 1; /* +1 for newline */
   }
 
@@ -324,7 +333,7 @@ ffindex_index_t* ffindex_index_parse(FILE *index_file, size_t num_max_entries)
 
 ffindex_entry_t* ffindex_get_entry_by_index(ffindex_index_t *index, size_t entry_index)
 {
-  if(entry_index < index->n_entries)
+  if(index != NULL && entry_index < index->n_entries)
     return &index->entries[entry_index];
   else
     return NULL;
@@ -409,13 +418,13 @@ int ffindex_write(ffindex_index_t* index, FILE* index_file)
 
 ffindex_index_t* ffindex_unlink_entries(ffindex_index_t* index, char** sorted_names_to_unlink, int n_names)
 {
-  int i = index->n_entries - 1;
+  size_t i = index->n_entries - 1;
   /* walk list of names to delete */
   for(int n = n_names - 1; n >= 0;  n--)
   {
     char* name_to_unlink = sorted_names_to_unlink[n];
     /* walk index entries */
-    for(; i >= 0; i--)
+    for(; i-- > 0;)
     {
       int cmp = strncmp(name_to_unlink, index->entries[i].name, FFINDEX_MAX_ENTRY_NAME_LENTH);
       if(cmp == 0) /* found entry */

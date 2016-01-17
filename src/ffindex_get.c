@@ -17,6 +17,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <getopt.h>
 
 #include "ffindex.h"
@@ -33,9 +34,20 @@ void usage(char* program_name)
 int main(int argn, char **argv)
 {
   int by_index = 0;
-  int opt;
-  while ((opt = getopt(argn, argv, "n")) != -1)
+  static struct option long_options[] =
   {
+    { "byindex", no_argument, NULL, 'n' },
+    { NULL,      0,           NULL,  0  }
+  };
+
+  int opt;
+  while (1)
+  {
+    int option_index = 0;
+    opt = getopt_long(argn, argv, "n", long_options, &option_index);
+    if (opt == -1)
+      break;
+
     switch (opt)
     {
       case 'n':
@@ -46,6 +58,7 @@ int main(int argn, char **argv)
         return EXIT_FAILURE;
     }
   }
+
   if(argn < 3)
   {
     usage(argv[0]);
