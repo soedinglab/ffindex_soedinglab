@@ -22,6 +22,7 @@ target_link_libraries (ffindex_apply ffindex)
 
 find_package(MPI)
 IF(MPI_FOUND)
+IF(HAVE_MPI)
   add_subdirectory(mpq)
   add_executable(ffindex_apply_mpi
     ffindex_apply_mpi.c
@@ -34,6 +35,7 @@ IF(MPI_FOUND)
   	${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply_mpi
   	DESTINATION bin
 	)
+ENDIF()
 ENDIF()
 
 

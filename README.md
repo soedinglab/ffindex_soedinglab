@@ -2,7 +2,7 @@
 
 FFindex was written by Andy Hauser <hauser@genzentrum.lmu.de>.
 Please add your name here if you distribute modified versions.
-Martin Steinegger <martin.steinegger@campus.lmu.de>
+Martin Steinegger <martin.steinegger@mpibpc.mpg.de>
 
 FFindex is provided under the Create Commons license "Attribution-ShareAlike 3.0",
 which basically captures the spirit of the Gnu Public License (GPL).
