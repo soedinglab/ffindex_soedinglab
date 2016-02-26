@@ -86,7 +86,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
     posix_spawnattr_t attr;
     posix_spawnattr_init(&attr);
 #ifdef POSIX_SPAWN_USEVFORK
-    flags |= POSIX_SPAWN_USEVFORK;
+    spawnFlags |= POSIX_SPAWN_USEVFORK;
 #endif
     posix_spawnattr_setflags(&attr, spawnFlags);
 
