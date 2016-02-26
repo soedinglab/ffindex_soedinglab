@@ -22,6 +22,7 @@
 #include <stdlib.h> // EXIT_*, system, malloc, free
 #include <unistd.h> // pipe, fork, close, dup2, execvp, write, read, opt*
 
+#include <sys/time.h>
 #include <sys/mman.h> // munmap
 #include <sys/wait.h> // waitpid
 #include <fcntl.h>    // fcntl, F_*, O_*
@@ -33,6 +34,7 @@
 
 #include "ffindex.h"
 #include "ffutil.h"
+
 #ifdef HAVE_MPI
 #include "mpq/mpq.h"
 #endif
@@ -91,6 +93,9 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
     posix_spawnattr_setflags(&attr, spawnFlags);
 
     pid_t child_pid;
+
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
     int err = posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ);
     if (err)
     {
@@ -176,7 +181,9 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
         waitpid(child_pid, &status, 0);
         if (!quiet)
         {
-                fprintf(stdout, "%s\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, WEXITSTATUS(status));
+            gettimeofday(&end, NULL);
+            ssize_t usec = end.tv_usec - start.tv_usec;
+            fprintf(stdout, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, usec, WEXITSTATUS(status));
         }
     }
 
