@@ -19,24 +19,28 @@ add_executable(ffindex_apply
 )
 target_link_libraries (ffindex_apply ffindex)
 
-
-find_package(MPI)
-IF(MPI_FOUND)
-IF(HAVE_MPI)
-  add_subdirectory(mpq)
-  add_executable(ffindex_apply_mpi
+add_executable(ffindex_apply_mpi
     ffindex_apply_mpi.c
-  )
-  set_property(TARGET ffindex_apply_mpi PROPERTY COMPILE_FLAGS ${MPI_LINK_FLAGS})
-  target_include_directories(ffindex_apply_mpi PUBLIC ${MPI_INCLUDE_PATH})
-  target_link_libraries (ffindex_apply_mpi mpq ${MPI_LIBRARIES} ffindex)
-	
-	INSTALL(PROGRAMS 
-  	${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply_mpi
-  	DESTINATION bin
-	)
-ENDIF()
-ENDIF()
+)
+
+target_link_libraries (ffindex_apply_mpi ffindex)
+
+if(HAVE_MPI)
+find_package(MPI)
+if(MPI_FOUND)
+    add_definitions("-DHAVE_MPI=1")
+    add_subdirectory(mpq)
+    set_property(TARGET ffindex_apply_mpi PROPERTY COMPILE_FLAGS ${MPI_LINK_FLAGS})
+    target_include_directories(ffindex_apply_mpi PUBLIC ${MPI_INCLUDE_PATH})
+    target_link_libraries (ffindex_apply_mpi mpq ${MPI_LIBRARIES})
+endif()
+endif()
+
+install(PROGRAMS
+    ${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply_mpi
+    DESTINATION bin
+)
+
 
 
 add_executable(ffindex_build

@@ -56,7 +56,7 @@ void MPQ_Worker ()
             break;
         }
 
-        MPQ_Payload(message[1], message[2]);
+        MPQ_Payload(MPQ_Environment, message[1], message[2]);
 
         message[0] = MSG_DONE;
         message[1] = 0;

@@ -58,5 +58,6 @@ void MPQ_Main (const size_t split_size);
 
 void MPQ_Finalize ();
 
-typedef int (*MPQ_Payload_t) (const size_t start, const size_t end);
+typedef int (*MPQ_Payload_t) (void* pEnv, const size_t start, const size_t end);
 MPQ_Payload_t MPQ_Payload;
+void* MPQ_Environment;
