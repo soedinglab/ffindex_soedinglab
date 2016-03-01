@@ -44,7 +44,7 @@ extern char **environ;
 
 int
 ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, char **program_argv,
-                       FILE *data_file_out, FILE *index_file_out, size_t *offset, int quiet)
+                       FILE *data_file_out, FILE *index_file_out, FILE* log_file_out, size_t *offset, int quiet)
 {
     int ret = 0;
     int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
@@ -183,7 +183,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
         {
             gettimeofday(&end, NULL);
             ssize_t usec = end.tv_usec - start.tv_usec;
-            fprintf(stdout, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, usec, WEXITSTATUS(status));
+            fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, usec, WEXITSTATUS(status));
         }
     }
 
@@ -197,6 +197,7 @@ struct ffindex_apply_mpi_data_s {
     ffindex_index_t* index;
     FILE*  data_file_out;
     FILE*  index_file_out;
+    FILE*  log_file_out;
     char*  program_name;
     char** program_argv;
     int    quiet;
@@ -220,6 +221,7 @@ int ffindex_apply_worker_payload (void* pEnv, const size_t start, const size_t e
                                            env->program_argv,
                                            env->data_file_out,
                                            env->index_file_out,
+                                           env->log_file_out,
                                            &(env->offset),
                                            env->quiet);
         if (error != 0)
@@ -275,15 +277,19 @@ void ignore_signal(int signal)
 void usage()
 {
     fprintf(stderr,
-            "USAGE: ffindex_apply_mpi [-p PARTS] [-d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT] DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
-            "\nDesigned and implemented by Andy Hauser <hauser@genzentrum.lmu.de>\n"
-            "and Milot Mirdita <milot@mirdita.de>.\n\n"
+            "USAGE: ffindex_apply_mpi [-q] "
+#ifdef HAVE_MPI
+            "[-p PARTS] [-l LOG_FILENAME_PREFIX] "
+#endif
+            "[-d DATA_FILENAME_OUT -i INDEX_FILENAME_OUT] DATA_FILENAME INDEX_FILENAME -- PROGRAM [PROGRAM_ARGS]*\n"
+            "\nDesigned and implemented by Andy Hauser <hauser@genzentrum.lmu.de> and Milot Mirdita <milot@mirdita.de>.\n\n"
 #ifdef HAVE_MPI
             "\t[-p PARTS]\t\tSets how many entries one worker processes per job.\n"
+            "\t[-l LOG_FILE_PREFIX]\tPrefix for filename for the per worker process logfiles.\n"
 #endif
+            "\t[-q]\t\t\tSilence the logging of every processed entry.\n"
             "\t[-d DATA_FILENAME_OUT]\tFFindex data file where the results will be saved to.\n"
             "\t[-i INDEX_FILENAME_OUT]\tFFindex index file where the results will be saved to.\n"
-            "\t[-q]\tSilence the logging of every processed entry.\n"
             "\tDATA_FILENAME\t\tInput ffindex data file.\n"
             "\tINDEX_FILENAME\t\tInput ffindex index file.\n"
             "\tPROGRAM [PROGRAM_ARGS]\tProgram to be executed for every ffindex entry.\n"
@@ -296,14 +302,21 @@ int main(int argn, char** argv)
 
     int exit_status = EXIT_SUCCESS;
 
-    size_t parts = 1;
     int quiet = 0;
     char *data_filename_out  = NULL;
     char *index_filename_out = NULL;
 
+#ifdef HAVE_MPI
+    size_t parts = 1;
+    char *log_filename       = NULL;
+#endif
+
     static struct option long_options[] =
     {
+#ifdef HAVE_MPI
         {"parts",   required_argument, NULL, 'p'},
+        {"logfile", required_argument, NULL, 'l'},
+#endif
         {"data",    required_argument, NULL, 'd'},
         {"index",   required_argument, NULL, 'i'},
         {"quiet",   no_argument,       NULL, 'q'},
@@ -314,20 +327,25 @@ int main(int argn, char** argv)
 	while (1)
 	{
         int option_index = 0;
-        opt = getopt_long(argn, argv, "qp:d:i:", long_options, &option_index);
+        opt = getopt_long(argn, argv, "ql:p:d:i:", long_options, &option_index);
         if(opt == -1)
             break;
 
 		switch (opt)
 		{
+#ifdef HAVE_MPI
+            case 'p':
+                parts = strtoull(optarg, NULL, 10);
+                break;
+            case 'l':
+                log_filename = optarg;
+                break;
+#endif
             case 'd':
                 data_filename_out = optarg;
                 break;
             case 'i':
                 index_filename_out = optarg;
-                break;
-            case 'p':
-                parts = strtoull(optarg, NULL, 10);
                 break;
             case 'q':
                 quiet = 1;
@@ -345,7 +363,7 @@ int main(int argn, char** argv)
             fprintf(stderr, "Please specify input data and index file.\n\n");
         }
 
-        fprintf(stderr, "Please specify program to execute.\n\n");
+        fprintf(stderr, "Please specify a program to execute.\n\n");
 
 		usage();
 
@@ -399,6 +417,13 @@ int main(int argn, char** argv)
 	}
 
 #ifdef HAVE_MPI
+    if(log_filename != NULL && quiet) {
+        fprintf(stderr, "Please specify either quiet (-q) or a logfile (-l).\n\n");
+        usage();
+        exit_status = EXIT_FAILURE;
+        goto cleanup_3;
+    }
+
     ffindex_apply_mpi_data_t* env = malloc(sizeof(ffindex_apply_mpi_data_t));
     int mpq_status = MPQ_Init(argn, argv, index->n_entries);
     if (mpq_status == MPQ_SUCCESS) {
@@ -419,7 +444,7 @@ int main(int argn, char** argv)
             env->data_file_out = fopen(data_filename_out_rank, "w+");
             if (env->data_file_out == NULL)
             {
-                fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", data_filename_out);
+                fferror_print(__FILE__, __LINE__, "fopen", data_filename_out_rank);
                 return EXIT_FAILURE;
             }
         }
@@ -434,7 +459,21 @@ int main(int argn, char** argv)
             env->index_file_out = fopen(index_filename_out_rank, "w+");
             if (env->index_file_out == NULL)
             {
-                fferror_print(__FILE__, __LINE__, "ffindex_apply_worker_payload", index_filename_out);
+                fferror_print(__FILE__, __LINE__, "fopen", index_filename_out_rank);
+                return EXIT_FAILURE;
+            }
+        }
+        env->log_file_out = stdout;
+        if (MPQ_rank != MPQ_MASTER && log_filename != NULL)
+        {
+            char log_filename_out_rank[FILENAME_MAX];
+            snprintf(log_filename_out_rank, FILENAME_MAX, "%s.%d",
+                     log_filename, MPQ_rank);
+
+            env->log_file_out = fopen(log_filename_out_rank, "w+");
+            if (env->log_file_out == NULL)
+            {
+                fferror_print(__FILE__, __LINE__, "fopen", log_filename_out_rank);
                 return EXIT_FAILURE;
             }
         }
@@ -511,7 +550,7 @@ int main(int argn, char** argv)
 
         int error = ffindex_apply_by_entry(data, entry,
                                            program_name, program_argv,
-                                           data_file_out, index_file_out,
+                                           data_file_out, index_file_out, stdout,
                                            &offset, quiet);
         if (error != 0)
         {
