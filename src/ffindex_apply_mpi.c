@@ -23,6 +23,7 @@
 #include <unistd.h> // pipe, fork, close, dup2, execvp, write, read, opt*
 
 #include <sys/time.h>
+#include <sys/wait.h>
 #include <sys/mman.h> // munmap
 #include <fcntl.h>    // fcntl, F_*, O_*
 #include <signal.h>   // sigaction, sigemptyset
