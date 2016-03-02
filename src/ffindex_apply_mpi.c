@@ -94,8 +94,9 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
 
     pid_t child_pid;
 
-    struct timeval start;
-    gettimeofday(&start, NULL);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int64_t start = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
     int err = posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ);
     if (err)
     {
@@ -181,10 +182,10 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
         waitpid(child_pid, &status, 0);
         if (!quiet)
         {
-            struct timeval end;
-            gettimeofday(&end, NULL);
-            ssize_t usec = end.tv_usec - start.tv_usec;
-            fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, usec, WEXITSTATUS(status));
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            int64_t end = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
+            fprintf(log_file_out, "%s\t%ld\t%ld\t%lld\t%d\n", entry->name, entry->offset, entry->length, end - start, WEXITSTATUS(status));
         }
     }
 
