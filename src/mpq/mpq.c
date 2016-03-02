@@ -47,7 +47,7 @@ int MPQ_Init (int argc, char** argv, const size_t num_jobs)
     return MPQ_SUCCESS;
 }
 
-void MPQ_Worker ()
+void MPQ_Worker (MPQ_Payload_t payload, void* env)
 {
     int message[3];
     while (1) {
@@ -56,7 +56,7 @@ void MPQ_Worker ()
             break;
         }
 
-        MPQ_Payload(MPQ_Environment, message[1], message[2]);
+        payload(env, message[1], message[2]);
 
         message[0] = MSG_DONE;
         message[1] = 0;
@@ -130,13 +130,13 @@ void MPQ_Master (const size_t split_size)
 
 }
 
-void MPQ_Main (const size_t split_size)
+void MPQ_Main (MPQ_Payload_t payload, void* env, const size_t split_size)
 {
     if (MPQ_is_init == 0)
         return;
 
     if (MPQ_rank != MPQ_MASTER) {
-        MPQ_Worker();
+        MPQ_Worker(payload, env);
         return;
     }
 

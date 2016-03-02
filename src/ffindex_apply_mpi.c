@@ -490,9 +490,7 @@ int main(int argn, char** argv)
             }
         }
 
-        MPQ_Payload = ffindex_apply_worker_payload;
-        MPQ_Environment = env;
-        MPQ_Main(parts);
+        MPQ_Main(ffindex_apply_worker_payload, env, parts);
 
         MPQ_Finalize();
 
