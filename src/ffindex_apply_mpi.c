@@ -327,7 +327,13 @@ int main(int argn, char** argv)
 	while (1)
 	{
         int option_index = 0;
-        opt = getopt_long(argn, argv, "ql:p:d:i:", long_options, &option_index);
+#ifdef HAVE_MPI
+        const char* short_options = "ql:p:d:i:";
+#else
+        const char* short_options = "qd:i:";
+#endif
+        opt = getopt_long(argn, argv, short_options, long_options, &option_index);
+
         if(opt == -1)
             break;
 
@@ -424,9 +430,9 @@ int main(int argn, char** argv)
         goto cleanup_3;
     }
 
-    ffindex_apply_mpi_data_t* env = malloc(sizeof(ffindex_apply_mpi_data_t));
     int mpq_status = MPQ_Init(argn, argv, index->n_entries);
     if (mpq_status == MPQ_SUCCESS) {
+        ffindex_apply_mpi_data_t* env = malloc(sizeof(ffindex_apply_mpi_data_t));
         env->data = data;
         env->index = index;
         env->program_name = program_name;
@@ -445,7 +451,8 @@ int main(int argn, char** argv)
             if (env->data_file_out == NULL)
             {
                 fferror_print(__FILE__, __LINE__, "fopen", data_filename_out_rank);
-                return EXIT_FAILURE;
+                exit_status = EXIT_FAILURE;
+                goto cleanup_4;
             }
         }
 
@@ -460,9 +467,11 @@ int main(int argn, char** argv)
             if (env->index_file_out == NULL)
             {
                 fferror_print(__FILE__, __LINE__, "fopen", index_filename_out_rank);
-                return EXIT_FAILURE;
+                exit_status = EXIT_FAILURE;
+                goto cleanup_5;
             }
         }
+
         env->log_file_out = stdout;
         if (MPQ_rank != MPQ_MASTER && log_filename != NULL)
         {
@@ -474,12 +483,13 @@ int main(int argn, char** argv)
             if (env->log_file_out == NULL)
             {
                 fferror_print(__FILE__, __LINE__, "fopen", log_filename_out_rank);
-                return EXIT_FAILURE;
+                exit_status = EXIT_FAILURE;
+                goto cleanup_6;
             }
         }
 
         MPQ_Payload = ffindex_apply_worker_payload;
-        MPQ_Environment = env;
+        MPQ_Environment = &env;
         MPQ_Main(parts);
 
         MPQ_Finalize();
@@ -489,26 +499,28 @@ int main(int argn, char** argv)
             ffindex_merge_splits(data_filename_out,
                                  index_filename_out, MPQ_size, 1);
         }
-    }
 
-    switch (mpq_status) {
-        case MPQ_ERROR_NO_WORKERS:
+        if(env->log_file_out) {
+            fclose(env->log_file_out);
+        }
+        cleanup_6:
+        if (env->index_file_out) {
+            fclose(env->index_file_out);
+        }
+        cleanup_5:
+        if (env->data_file_out) {
+            fclose(env->data_file_out);
+        }
+        cleanup_4:
+        free(env);
+    } else {
+        if (mpq_status == MPQ_ERROR_NO_WORKERS) {
             fprintf(stderr, "MPQ_Init: Needs at least one worker process.\n");
-            return EXIT_FAILURE;
-        case MPQ_ERROR_TOO_MANY_WORKERS:
+        } else if (mpq_status == MPQ_ERROR_TOO_MANY_WORKERS) {
             fprintf(stderr, "MPQ_Init: Too many worker processes.\n");
-            return EXIT_FAILURE;
-        default:
-            break;
+        }
+        exit_status = EXIT_FAILURE;
     }
-
-    if (env->index_file_out) {
-        fclose(env->index_file_out);
-    }
-    if (env->data_file_out) {
-        fclose(env->data_file_out);
-    }
-    free(env);
 #else
     FILE* data_file_out = NULL;
     if (data_filename_out != NULL)
@@ -572,20 +584,18 @@ int main(int argn, char** argv)
     munmap(index->index_data, index->index_data_size);
     free(index);
 
-  cleanup_3:
-	munmap(data, data_size);
+    cleanup_3:
+    munmap(data, data_size);
 
-  cleanup_2:
-    if(index_file)
-    {
+    cleanup_2:
+    if (index_file) {
         fclose(index_file);
     }
 
-  cleanup_1:
-    if(data_file)
-    {
+    cleanup_1:
+    if (data_file) {
         fclose(data_file);
     }
 
-	return exit_status;
+    return exit_status;
 }
