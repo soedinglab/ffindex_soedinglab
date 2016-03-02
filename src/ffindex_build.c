@@ -199,7 +199,9 @@ int main(int argn, char** argv)
 
       size_t data_size;
       char *data_to_add = ffindex_mmap_data(data_file_to_add, &data_size);
-      ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add, 0);
+
+      size_t entries = ffcount_lines(list_ffindex_index[i]);
+      ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add, entries);
       for(size_t entry_i = 0; entry_i < index_to_add->n_entries; entry_i++)
       {
         ffindex_entry_t *entry = ffindex_get_entry_by_index(index_to_add, entry_i);
@@ -236,8 +238,9 @@ int main(int argn, char** argv)
   if(sort)
   {
     fclose(index_file);
+    size_t entries = ffcount_lines(index_filename);
     index_file = fopen(index_filename, "r+");
-    ffindex_index_t* index = ffindex_index_parse(index_file, 0);
+    ffindex_index_t* index = ffindex_index_parse(index_file, entries);
     if(index == NULL)
     {
       fferror_print(__FILE__, __LINE__, __func__, index_filename);

@@ -24,7 +24,6 @@
 
 #include <sys/time.h>
 #include <sys/mman.h> // munmap
-#include <sys/wait.h> // waitpid
 #include <fcntl.h>    // fcntl, F_*, O_*
 #include <signal.h>   // sigaction, sigemptyset
 
@@ -410,12 +409,13 @@ int main(int argn, char** argv)
 	char *data = ffindex_mmap_data(data_file, &data_size);
     if (data == MAP_FAILED)
     {
-        fferror_print(__FILE__, __LINE__, "ffindex_mmap_data", index_filename);
+        fferror_print(__FILE__, __LINE__, "ffindex_mmap_data", data_filename);
         exit_status = EXIT_FAILURE;
         goto cleanup_2;
     }
 
-	ffindex_index_t *index = ffindex_index_parse(index_file, 0);
+    size_t entries = ffcount_lines(index_filename);
+	ffindex_index_t *index = ffindex_index_parse(index_file, entries);
 	if (index == NULL)
 	{
 		fferror_print(__FILE__, __LINE__, "ffindex_index_parse", index_filename);

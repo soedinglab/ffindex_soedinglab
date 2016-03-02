@@ -39,5 +39,25 @@ char* ffnchomp(char *s, size_t len)
   return s;
 }
 
+size_t ffcount_lines(const char *filename)
+{
+  FILE *fp = fopen(filename, "r");
+  if (fp == NULL) {
+    return 0;
+  }
+
+  size_t lines = 0;
+  while (!feof(fp)) {
+    char ch = (char) fgetc(fp);
+    if (ch == '\n') {
+      lines++;
+    }
+  }
+
+  fclose(fp);
+
+  return lines;
+}
+
 /* vim: ts=2 sw=2 et
 */

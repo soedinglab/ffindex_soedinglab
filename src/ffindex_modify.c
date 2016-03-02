@@ -107,7 +107,8 @@ int main(int argn, char **argv)
   index_file = fopen(index_filename, "r+");
   if(index_file == NULL) { perror(index_filename); return EXIT_FAILURE; }
 
-  ffindex_index_t* index = ffindex_index_parse(index_file, 0);
+  size_t entries = ffcount_lines(index_filename);
+  ffindex_index_t* index = ffindex_index_parse(index_file, entries);
   if(index == NULL) { perror("ffindex_index_parse failed"); return (EXIT_FAILURE); }
 
   fclose(index_file);

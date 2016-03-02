@@ -65,8 +65,9 @@ int main(int argc, char **argv)
 
   size_t data_size;
   char *data = ffindex_mmap_data(data_file, &data_size);
-  
-  ffindex_index_t* index = ffindex_index_parse(index_file, 0); 
+
+  size_t entries = ffcount_lines(index_filename);
+  ffindex_index_t* index = ffindex_index_parse(index_file, entries);
   if(index == NULL)  {   
     perror("ffindex_index_parse failed");
     exit(EXIT_FAILURE);
@@ -107,7 +108,8 @@ int main(int argc, char **argv)
   // sort FFindex index
   fclose(sorted_index_file);
   sorted_index_file = fopen(sorted_index_filename, "r+");
-  index = ffindex_index_parse(sorted_index_file, 0);
+  entries = ffcount_lines(index_filename);
+  index = ffindex_index_parse(sorted_index_file, entries);
   if(index == NULL)  {   
     perror("ffindex_index_parse failed");
     exit(EXIT_FAILURE);

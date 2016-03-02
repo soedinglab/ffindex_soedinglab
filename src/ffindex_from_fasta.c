@@ -166,8 +166,10 @@ int main(int argn, char **argv)
   if(sort)
   {
     fclose(index_file);
+
+    size_t entries = ffcount_lines(index_filename);
     index_file = fopen(index_filename, "r+");
-    ffindex_index_t* index = ffindex_index_parse(index_file, 0);
+    ffindex_index_t* index = ffindex_index_parse(index_file, entries);
     if(index == NULL)
     {
       perror("ffindex_index_parse failed");

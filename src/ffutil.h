@@ -27,6 +27,8 @@ int fferror_print(char *sourcecode_filename, int line, const char *function_name
 
 char* ffnchomp(char *s, size_t len);
 
+size_t ffcount_lines(const char *filename);
+
 #endif
 /* vim: ts=2 sw=2 et
 */
