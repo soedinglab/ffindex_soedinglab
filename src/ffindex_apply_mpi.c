@@ -94,7 +94,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
 
     pid_t child_pid;
 
-    struct timeval start, end;
+    struct timeval start;
     gettimeofday(&start, NULL);
     int err = posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ);
     if (err)
@@ -181,6 +181,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
         waitpid(child_pid, &status, 0);
         if (!quiet)
         {
+            struct timeval end;
             gettimeofday(&end, NULL);
             ssize_t usec = end.tv_usec - start.tv_usec;
             fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, usec, WEXITSTATUS(status));
@@ -489,7 +490,7 @@ int main(int argn, char** argv)
         }
 
         MPQ_Payload = ffindex_apply_worker_payload;
-        MPQ_Environment = &env;
+        MPQ_Environment = env;
         MPQ_Main(parts);
 
         MPQ_Finalize();
