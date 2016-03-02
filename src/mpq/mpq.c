@@ -166,7 +166,5 @@ void MPQ_Finalize ()
     }
 
     MPI_Finalize();
-    MPQ_Payload = NULL;
-    MPQ_Environment = NULL;
     MPQ_is_init = 0;
 }
