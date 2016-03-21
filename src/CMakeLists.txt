@@ -1,4 +1,4 @@
-set(CMAKE_C_FLAGS "-std=c99")
+set(CMAKE_C_FLAGS "-std=c99 ${CMAKE_C_FLAGS}")
 
 # sets HAVE_FMEMOPEN
 add_subdirectory(ext)
@@ -27,12 +27,13 @@ target_link_libraries (ffindex_apply_mpi ffindex)
 
 if(HAVE_MPI)
 find_package(MPI)
-if(MPI_FOUND)
+if(MPI_C_FOUND)
     add_definitions("-DHAVE_MPI=1")
     add_subdirectory(mpq)
-    set_property(TARGET ffindex_apply_mpi PROPERTY COMPILE_FLAGS ${MPI_LINK_FLAGS})
-    target_include_directories(ffindex_apply_mpi PUBLIC ${MPI_INCLUDE_PATH})
-    target_link_libraries (ffindex_apply_mpi mpq ${MPI_LIBRARIES})
+	set_property(TARGET ffindex_apply_mpi PROPERTY COMPILE_FLAGS "${MPI_C_COMPILE_FLAGS}")
+	set_property(TARGET ffindex_apply_mpi PROPERTY LINK_FLAGS "${MPI_C_LINK_FLAGS}")
+    target_include_directories(ffindex_apply_mpi PUBLIC ${MPI_C_INCLUDE_PATH})
+    target_link_libraries (ffindex_apply_mpi mpq ${MPI_C_LIBRARIES})
 endif()
 endif()
 
