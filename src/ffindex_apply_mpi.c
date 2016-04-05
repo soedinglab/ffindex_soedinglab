@@ -279,7 +279,7 @@ void ignore_signal(int signal)
 void usage()
 {
     fprintf(stderr,
-            "USAGE: ffindex_apply_mpi [-q] "
+            "USAGE: ffindex_apply_mpi [-q] [-k] "
 #ifdef HAVE_MPI
             "[-p PARTS] [-l LOG_FILENAME_PREFIX] "
 #endif
@@ -290,6 +290,7 @@ void usage()
             "\t[-l LOG_FILE_PREFIX]\tPrefix for filename for the per worker process logfiles.\n"
 #endif
             "\t[-q]\t\t\tSilence the logging of every processed entry.\n"
+            "\t[-k]\t\t\tKeep unmerged ffindex splits.\n"
             "\t[-d DATA_FILENAME_OUT]\tFFindex data file where the results will be saved to.\n"
             "\t[-i INDEX_FILENAME_OUT]\tFFindex index file where the results will be saved to.\n"
             "\tDATA_FILENAME\t\tInput ffindex data file.\n"
@@ -305,6 +306,7 @@ int main(int argn, char** argv)
     int exit_status = EXIT_SUCCESS;
 
     int quiet = 0;
+    int keepTmp = 0;
     char *data_filename_out  = NULL;
     char *index_filename_out = NULL;
 
@@ -322,6 +324,7 @@ int main(int argn, char** argv)
         {"data",    required_argument, NULL, 'd'},
         {"index",   required_argument, NULL, 'i'},
         {"quiet",   no_argument,       NULL, 'q'},
+        {"keep-tmp",no_argument,       NULL, 'k'},
         {NULL,      0,                 NULL,  0 }
     };
 
@@ -330,9 +333,9 @@ int main(int argn, char** argv)
 	{
         int option_index = 0;
 #ifdef HAVE_MPI
-        const char* short_options = "ql:p:d:i:";
+        const char* short_options = "kql:p:d:i:";
 #else
-        const char* short_options = "qd:i:";
+        const char* short_options = "kqd:i:";
 #endif
         opt = getopt_long(argn, argv, short_options, long_options, &option_index);
 
@@ -357,6 +360,9 @@ int main(int argn, char** argv)
                 break;
             case 'q':
                 quiet = 1;
+                break;
+            case 'k':
+                keepTmp = 1;
                 break;
             default:
                 break;
@@ -497,8 +503,9 @@ int main(int argn, char** argv)
 
         if (MPQ_rank == MPQ_MASTER)
         {
+            int removeTmp = keepTmp == 0;
             ffindex_merge_splits(data_filename_out,
-                                 index_filename_out, MPQ_size, 1);
+                                 index_filename_out, MPQ_size, removeTmp);
         }
 
         if(env->log_file_out) {
