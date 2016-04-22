@@ -58,5 +58,8 @@ int MPQ_Init (int argc, char** argv, const size_t num_jobs);
 
 void MPQ_Main (MPQ_Payload_t payload, void* env, const size_t split_size);
 
+void MPQ_Master (const size_t split_size);
+void MPQ_Worker (MPQ_Payload_t payload, void* env);
+
 void MPQ_Finalize ();
 

@@ -238,35 +238,6 @@ int ffindex_apply_worker_payload (void* pEnv, const size_t start, const size_t e
 }
 #endif
 
-void ffindex_merge_splits(char* data_filename, char* index_filename, int splits, int remove_temporary)
-{
-    if (!data_filename)
-        return;
-
-    if (!index_filename)
-        return;
-
-    char merge_command[FILENAME_MAX * 5];
-    char tmp_filename[FILENAME_MAX];
-
-    for (int i = 1; i < splits; i++)
-    {
-        snprintf(merge_command, FILENAME_MAX,
-                 "ffindex_build -as -d %s.%d -i %s.%d %s %s",
-                 data_filename, i, index_filename, i, data_filename, index_filename);
-
-        int ret = system(merge_command);
-        if (ret == 0 && remove_temporary)
-        {
-            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename, i);
-            remove(tmp_filename);
-
-            snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename, i);
-            remove(tmp_filename);
-        }
-    }
-}
-
 void ignore_signal(int signal)
 {
     struct sigaction handler;
@@ -497,8 +468,7 @@ int main(int argn, char** argv)
 
         if (MPQ_rank == MPQ_MASTER)
         {
-            ffindex_merge_splits(data_filename_out,
-                                 index_filename_out, MPQ_size, 1);
+            ffmerge_splits(data_filename_out, index_filename_out, MPQ_size, 1);
         }
 
         if(env->log_file_out) {

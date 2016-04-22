@@ -17,6 +17,8 @@
 
 #include "ffutil.h"
 #include <stdio.h>
+#include <limits.h>
+#include <stdlib.h>
 
 int fferror_print(char *sourcecode_filename, int line, const char *function_name, const char *message)
 {
@@ -57,6 +59,35 @@ size_t ffcount_lines(const char *filename)
   fclose(fp);
 
   return lines;
+}
+
+void ffmerge_splits(const char* data_filename, const char* index_filename, int splits, int remove_temporary)
+{
+  if (!data_filename)
+    return;
+
+  if (!index_filename)
+    return;
+
+  char merge_command[ARG_MAX];
+  char tmp_filename[FILENAME_MAX];
+
+  for (int i = 1; i < splits; i++)
+  {
+    snprintf(merge_command, FILENAME_MAX,
+             "ffindex_build -as -d %s.%d -i %s.%d %s %s",
+             data_filename, i, index_filename, i, data_filename, index_filename);
+
+    int ret = system(merge_command);
+    if (ret == 0 && remove_temporary)
+    {
+      snprintf(tmp_filename, FILENAME_MAX, "%s.%d", index_filename, i);
+      remove(tmp_filename);
+
+      snprintf(tmp_filename, FILENAME_MAX, "%s.%d", data_filename, i);
+      remove(tmp_filename);
+    }
+  }
 }
 
 /* vim: ts=2 sw=2 et
