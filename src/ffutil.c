@@ -69,7 +69,7 @@ void ffmerge_splits(const char* data_filename, const char* index_filename, int s
   if (!index_filename)
     return;
 
-  char merge_command[ARG_MAX];
+  char merge_command[FILENAME_MAX * 5];
   char tmp_filename[FILENAME_MAX];
 
   for (int i = 1; i < splits; i++)
