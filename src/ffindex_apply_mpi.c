@@ -412,6 +412,7 @@ int main(int argn, char** argv)
 
     int mpq_status = MPQ_Init(argn, argv, index->n_entries);
     if (mpq_status == MPQ_SUCCESS) {
+      if(MPQ_rank != MPQ_MASTER) {
         ffindex_apply_mpi_data_t* env = malloc(sizeof(ffindex_apply_mpi_data_t));
         env->data = data;
         env->index = index;
@@ -421,7 +422,7 @@ int main(int argn, char** argv)
         env->offset = 0;
 
         env->data_file_out = NULL;
-        if (MPQ_rank != MPQ_MASTER && data_filename_out != NULL)
+        if (data_filename_out != NULL)
         {
             char data_filename_out_rank[FILENAME_MAX];
             snprintf(data_filename_out_rank, FILENAME_MAX, "%s.%d",
@@ -437,7 +438,7 @@ int main(int argn, char** argv)
         }
 
         env->index_file_out = NULL;
-        if (MPQ_rank != MPQ_MASTER && index_filename_out != NULL)
+        if (index_filename_out != NULL)
         {
             char index_filename_out_rank[FILENAME_MAX];
             snprintf(index_filename_out_rank, FILENAME_MAX, "%s.%d",
@@ -453,7 +454,7 @@ int main(int argn, char** argv)
         }
 
         env->log_file_out = stdout;
-        if (MPQ_rank != MPQ_MASTER && log_filename != NULL)
+        if (log_filename != NULL)
         {
             char log_filename_out_rank[FILENAME_MAX];
             snprintf(log_filename_out_rank, FILENAME_MAX, "%s.%d",
@@ -468,29 +469,40 @@ int main(int argn, char** argv)
             }
         }
 
-        MPQ_Main(ffindex_apply_worker_payload, env, parts);
+        MPQ_Worker(ffindex_apply_worker_payload, env);
 
-        MPQ_Finalize();
-
-        if (MPQ_rank == MPQ_MASTER)
-        {
-            int removeTmp = keepTmp == 0;
-            ffmerge_splits(data_filename_out, index_filename_out, MPQ_size, removeTmp);
-        }
-
+        // make sure that all written files are properly flushed and synced
+        // so that ffmerge_splits wont work on stale data
         if(env->log_file_out) {
-            fclose(env->log_file_out);
+          int fd = fileno(env->log_file_out);
+          fflush(env->log_file_out);
+          fsync(fd);
+          fclose(env->log_file_out);
         }
         cleanup_6:
         if (env->index_file_out) {
-            fclose(env->index_file_out);
+          int fd = fileno(env->index_file_out);
+          fflush(env->index_file_out);
+          fsync(fd);
+          fclose(env->index_file_out);
         }
         cleanup_5:
         if (env->data_file_out) {
-            fclose(env->data_file_out);
+          int fd = fileno(env->data_file_out);
+          fflush(env->data_file_out);
+          fsync(fd);
+          fclose(env->data_file_out);
         }
         cleanup_4:
         free(env);
+
+        MPQ_Finalize();
+      } else {
+        MPQ_Master(parts);
+        MPQ_Finalize();
+        int removeTmp = keepTmp == 0;
+        ffmerge_splits(data_filename_out, index_filename_out, MPQ_size, removeTmp);
+      }
     } else {
         if (mpq_status == MPQ_ERROR_NO_WORKERS) {
             fprintf(stderr, "MPQ_Init: Needs at least one worker process.\n");
@@ -549,7 +561,6 @@ int main(int argn, char** argv)
             break;
         }
     }
-
 
     if (index_file_out) {
         fclose(index_file_out);
