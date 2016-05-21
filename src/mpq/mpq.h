@@ -46,7 +46,6 @@ extern int MPQ_size;
 enum {
     MPQ_SUCCESS = 0,
     MPQ_ERROR_NO_WORKERS,
-    MPQ_ERROR_TOO_MANY_WORKERS,
     MPQ_ERROR_REINIT,
     MPQ_ERROR_UNKNOWN
 };

@@ -6,7 +6,7 @@
 
 int MPQ_size;
 int MPQ_rank;
-int MPQ_num_jobs;
+size_t MPQ_num_jobs;
 int MPQ_is_init = 0;
 
 enum {
@@ -35,11 +35,6 @@ int MPQ_Init (int argc, char** argv, const size_t num_jobs)
     if (workers < 1) {
         MPI_Finalize();
         return MPQ_ERROR_NO_WORKERS;
-    }
-
-    if (num_jobs < workers) {
-        MPI_Finalize();
-        return MPQ_ERROR_TOO_MANY_WORKERS;
     }
 
     MPQ_is_init = 1;
@@ -71,24 +66,37 @@ void MPQ_Worker (MPQ_Payload_t payload, void* env)
 
 void MPQ_Master (const size_t split_size)
 {
-    typedef struct idle_wokers_s idle_workers_t;
     if (MPQ_is_init == 0)
         return;
 
-    struct idle_wokers_s {
+    typedef struct idle_workers_s {
         int rank;
-        STAILQ_ENTRY(idle_wokers_s) entries;
-    };
+        STAILQ_ENTRY(idle_workers_s) entries;
+    } idle_workers_t;
 
-    STAILQ_HEAD(idle_workers, idle_wokers_s) idle_workers_head;
+    STAILQ_HEAD(idle_workers, idle_workers_s) idle_workers_head;
     STAILQ_INIT(&idle_workers_head);
 
+    size_t num_workers = MPQ_size;
+    if (MPQ_num_jobs < MPQ_size) {
+        num_workers = MPQ_num_jobs;
+    }
+\
     idle_workers_t* worker = NULL;
-    for (int i = 1; i < MPQ_size; i++)
-    {
+    for (int i = 1; i < num_workers; ++i) {
         worker = malloc(sizeof(idle_workers_t));
         worker->rank = i;
         STAILQ_INSERT_HEAD(&idle_workers_head, worker, entries);
+    }
+
+    for (int i = (int)num_workers; i < MPQ_size; ++i) {
+        MPQ_Release_Worker(i);
+    }
+
+    // FIXME: find a better way to solve this than just completely suppressing splits
+    size_t split = split_size;
+    if (MPQ_num_jobs < split) {
+        split = 1;
     }
 
     MPI_Status status;
@@ -99,7 +107,7 @@ void MPQ_Master (const size_t split_size)
 
     while (remaining_jobs > 0 || !STAILQ_EMPTY(&idle_workers_head)) {
         if (remaining_jobs > 0 && !STAILQ_EMPTY(&idle_workers_head)) {
-            size_t batch_size = (remaining_jobs < split_size) ? remaining_jobs : split_size;
+            size_t batch_size = (remaining_jobs < split) ? remaining_jobs : split;
 
             message[0] = MSG_JOB;
             message[1] = start_job;

@@ -506,10 +506,8 @@ int main(int argn, char** argv)
     } else {
         if (mpq_status == MPQ_ERROR_NO_WORKERS) {
             fprintf(stderr, "MPQ_Init: Needs at least one worker process.\n");
-        } else if (mpq_status == MPQ_ERROR_TOO_MANY_WORKERS) {
-            fprintf(stderr, "MPQ_Init: Too many worker processes.\n");
+            exit_status = EXIT_FAILURE;
         }
-        exit_status = EXIT_FAILURE;
     }
 #else
     FILE* data_file_out = NULL;
