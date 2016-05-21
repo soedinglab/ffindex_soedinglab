@@ -29,8 +29,7 @@
  To setup a MPQ Queue use MPQ_Init.
  To tear it down again use MPQ_Finalize.
  
- MPQ_Main starts the main loop that either starts 
- a MPI master process or MPI worker processes.
+ MPQ_Master starts a MPI master process and MPI_Worker a MPI worker processes.
  
  The worker processes call the function pointed to by MPQ_Payload.
 
@@ -55,8 +54,6 @@ enum {
 typedef int (*MPQ_Payload_t) (void* pEnv, const size_t start, const size_t end);
 
 int MPQ_Init (int argc, char** argv, const size_t num_jobs);
-
-void MPQ_Main (MPQ_Payload_t payload, void* env, const size_t split_size);
 
 void MPQ_Master (const size_t split_size);
 void MPQ_Worker (MPQ_Payload_t payload, void* env);

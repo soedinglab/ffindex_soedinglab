@@ -49,6 +49,9 @@ int MPQ_Init (int argc, char** argv, const size_t num_jobs)
 
 void MPQ_Worker (MPQ_Payload_t payload, void* env)
 {
+    if (MPQ_is_init == 0)
+        return;
+
     int message[3];
     while (1) {
         MPI_Recv(message, 3, MPI_INT, MPQ_MASTER, TAG_JOB, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -69,6 +72,8 @@ void MPQ_Worker (MPQ_Payload_t payload, void* env)
 void MPQ_Master (const size_t split_size)
 {
     typedef struct idle_wokers_s idle_workers_t;
+    if (MPQ_is_init == 0)
+        return;
 
     struct idle_wokers_s {
         int rank;
@@ -128,19 +133,6 @@ void MPQ_Master (const size_t split_size)
         free(worker);
     }
 
-}
-
-void MPQ_Main (MPQ_Payload_t payload, void* env, const size_t split_size)
-{
-    if (MPQ_is_init == 0)
-        return;
-
-    if (MPQ_rank != MPQ_MASTER) {
-        MPQ_Worker(payload, env);
-        return;
-    }
-
-    MPQ_Master(split_size);
 }
 
 void MPQ_Release_Worker (const int worker_rank)
