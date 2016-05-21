@@ -89,10 +89,6 @@ void MPQ_Master (const size_t split_size)
         STAILQ_INSERT_HEAD(&idle_workers_head, worker, entries);
     }
 
-    for (int i = (int)num_workers; i < MPQ_size; ++i) {
-        MPQ_Release_Worker(i);
-    }
-
     // FIXME: find a better way to solve this than just completely suppressing splits
     size_t split = split_size;
     if (MPQ_num_jobs < split) {
