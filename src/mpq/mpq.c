@@ -77,15 +77,15 @@ void MPQ_Master (const size_t split_size)
     STAILQ_HEAD(idle_workers, idle_workers_s) idle_workers_head;
     STAILQ_INIT(&idle_workers_head);
 
-    size_t num_workers = MPQ_size;
-    if (MPQ_num_jobs < MPQ_size) {
+    size_t num_workers = MPQ_size - 1;
+    if (MPQ_num_jobs < num_workers) {
         num_workers = MPQ_num_jobs;
     }
 \
     idle_workers_t* worker = NULL;
-    for (int i = 1; i < num_workers; ++i) {
+    for (int i = 0; i < num_workers; ++i) {
         worker = malloc(sizeof(idle_workers_t));
-        worker->rank = i;
+        worker->rank = i + 1;
         STAILQ_INSERT_HEAD(&idle_workers_head, worker, entries);
     }
 
