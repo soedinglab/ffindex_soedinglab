@@ -27,7 +27,7 @@
  in user space that matches the MPQ_Payload_t type.
  
  To setup a MPQ Queue use MPQ_Init.
- To tear it down again use MPQ_Finalize.
+ To tear it down again use the normal MPI_Finalize.
  
  MPQ_Master starts a MPI master process and MPI_Worker a MPI worker processes.
  
@@ -37,6 +37,7 @@
  */
 
 #include <stddef.h>
+#include <mpi.h>
 
 #define MPQ_MASTER 0
 
@@ -50,12 +51,9 @@ enum {
     MPQ_ERROR_UNKNOWN
 };
 
-typedef int (*MPQ_Payload_t) (void* pEnv, const size_t start, const size_t end);
+typedef void (*MPQ_Payload_t) (void* pEnv, const size_t start, const size_t end);
 
 int MPQ_Init (int argc, char** argv, const size_t num_jobs);
 
 void MPQ_Master (const size_t split_size);
 void MPQ_Worker (MPQ_Payload_t payload, void* env);
-
-void MPQ_Finalize ();
-
