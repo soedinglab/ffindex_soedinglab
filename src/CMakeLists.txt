@@ -38,7 +38,7 @@ endif()
 endif()
 
 install(PROGRAMS
-    ${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply_mpi
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_apply_mpi
     DESTINATION bin
 )
 
@@ -99,12 +99,12 @@ install(TARGETS ffindex_shared
 
 
 INSTALL(PROGRAMS 
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_apply
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_build
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_from_fasta
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_get
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_modify
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_unpack
-  ${CMAKE_CURRENT_BINARY_DIR}/ffindex_order
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_apply
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_build
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_from_fasta
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_get
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_modify
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_unpack
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_order
   DESTINATION bin
 )
