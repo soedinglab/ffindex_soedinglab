@@ -80,6 +80,12 @@ add_executable(ffindex_order
 target_link_libraries (ffindex_order ffindex)
 
 
+add_executable(ffindex_from_fasta_with_split
+    ffindex_from_fasta_with_split.c
+)
+target_link_libraries (ffindex_from_fasta_with_split ffindex)
+
+
 install(PROGRAMS 
 	ffindex.h 
 	ffutil.h
@@ -106,5 +112,6 @@ INSTALL(PROGRAMS
   ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_modify
   ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_unpack
   ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_order
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ffindex_from_fasta_with_split
   DESTINATION bin
 )
