@@ -528,5 +528,22 @@ int ffindex_tree_write(ffindex_index_t* index, FILE* index_file)
   return ret;
 }
 
+void ff_sort_index(const char* index_filename, FILE* index_fh) {
+  rewind(index_fh);
+  ffindex_index_t* index = ffindex_index_parse(index_fh, 0);
+
+  if(index == NULL)	{
+    perror("ffindex_index_parse failed");
+    exit(EXIT_FAILURE);
+  }
+
+  fclose(index_fh);
+  ffindex_sort_index_file(index);
+  index_fh = fopen(index_filename, "w");
+  if(index_fh == NULL) { perror(index_filename); }
+  ffindex_write(index, index_fh);
+}
+
+
 /* vim: ts=2 sw=2 et
 */
