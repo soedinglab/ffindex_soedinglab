@@ -29,8 +29,6 @@ char* ffnchomp(char *s, size_t len);
 
 size_t ffcount_lines(const char *filename);
 
-void ffmerge_splits(const char* data_filename, const char* index_filename, int splits, int remove_temporary);
-
 #endif
 /* vim: ts=2 sw=2 et
 */

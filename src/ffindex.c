@@ -528,7 +528,7 @@ int ffindex_tree_write(ffindex_index_t* index, FILE* index_file)
   return ret;
 }
 
-void ff_sort_index(const char* index_filename, FILE* index_fh) {
+void ffsort_index(const char* index_filename, FILE* index_fh) {
   rewind(index_fh);
   ffindex_index_t* index = ffindex_index_parse(index_fh, 0);
 
@@ -542,6 +542,80 @@ void ff_sort_index(const char* index_filename, FILE* index_fh) {
   index_fh = fopen(index_filename, "w");
   if(index_fh == NULL) { perror(index_filename); }
   ffindex_write(index, index_fh);
+}
+
+void ffmerge_splits(const char* data_filename, const char* index_filename,
+                    int splits, int remove_temporary) {
+
+  FILE* data_file  = fopen(data_filename, "w");
+  if( data_file == NULL) {
+    char error_message[2*FILENAME_MAX];
+    sprintf(error_message, "Could not open file: %s", data_filename);
+    perror(error_message);
+    exit(EXIT_FAILURE);
+  }
+
+  FILE* index_file = fopen(index_filename, "w");
+  if(index_file == NULL) {
+    char error_message[2*FILENAME_MAX];
+    sprintf(error_message, "Could not open file: %s", index_filename);
+    perror(error_message);
+    exit(EXIT_FAILURE);
+  }
+
+  size_t offset = 0;
+
+  // Append ffindex split databases
+  for (int i = 0; i < splits; i++) {
+    char data_file_name_to_add[FILENAME_MAX];
+    char index_file_name_to_add[FILENAME_MAX];
+
+    snprintf(data_file_name_to_add, FILENAME_MAX, "%s.%d", data_filename, i);
+    snprintf(index_file_name_to_add, FILENAME_MAX, "%s.%d.ffindex", index_filename, i);
+
+    FILE* data_file_to_add = fopen(data_file_name_to_add, "r");
+    if (data_file_to_add == NULL) {
+      char error_message[2*FILENAME_MAX];
+      sprintf(error_message, "Could not open file: %s", data_file_name_to_add);
+      perror(error_message);
+      exit(EXIT_FAILURE);
+    }
+
+    FILE* index_file_to_add = fopen(index_file_name_to_add, "r");
+    if (index_file_to_add == NULL) {
+      char error_message[2*FILENAME_MAX];
+      sprintf(error_message, "Could not open file: %s", index_file_name_to_add);
+      perror(error_message);
+      exit(EXIT_FAILURE);
+    }
+
+    size_t data_size;
+    char *data_to_add = ffindex_mmap_data(data_file_to_add, &data_size);
+    ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add,
+        0);
+
+    for(size_t entry_i = 0; entry_i < index_to_add->n_entries; entry_i++)
+    {
+      ffindex_entry_t *entry = ffindex_get_entry_by_index(index_to_add, entry_i);
+      ffindex_insert_memory(data_file, index_file, &offset,
+                            ffindex_get_data_by_entry(data_to_add, entry),
+                            entry->length - 1, entry->name);
+    }
+
+    fclose(data_file_to_add);
+    fclose(index_file_to_add);
+
+    if(remove_temporary) {
+      remove(data_file_name_to_add);
+      remove(index_file_name_to_add);
+    }
+  }
+
+  fclose(data_file);
+  fflush(index_file);
+
+  ffsort_index(index_filename, index_file);
+  fclose(index_file);
 }
 
 

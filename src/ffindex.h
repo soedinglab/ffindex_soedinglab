@@ -100,7 +100,10 @@ int ffindex_tree_write(ffindex_index_t* index, FILE* index_file);
 
 int ffindex_insert_filestream(FILE *data_file, FILE *index_file, size_t *offset, FILE* file, char *name);
 
-void ff_sort_index(const char* index_filename, FILE* index_fh);
+void ffsort_index(const char* index_filename, FILE* index_fh);
+
+void ffmerge_splits(const char* data_filename, const char* index_filename,
+                    int splits, int remove_temporary);
 
 char* ffindex_copyright();
 
