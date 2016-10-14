@@ -528,20 +528,23 @@ int ffindex_tree_write(ffindex_index_t* index, FILE* index_file)
   return ret;
 }
 
-void ffsort_index(const char* index_filename, FILE* index_fh) {
-  rewind(index_fh);
-  ffindex_index_t* index = ffindex_index_parse(index_fh, 0);
+void ffsort_index(const char* index_filename, FILE** index_fh) {
+  rewind((*index_fh));
+  size_t lines = ffcount_lines_file((*index_fh));
+  rewind((*index_fh));
+
+  ffindex_index_t* index = ffindex_index_parse((*index_fh), lines);
+  fclose((*index_fh));
 
   if(index == NULL)	{
     perror("ffindex_index_parse failed");
     exit(EXIT_FAILURE);
   }
 
-  fclose(index_fh);
   ffindex_sort_index_file(index);
-  index_fh = fopen(index_filename, "w");
-  if(index_fh == NULL) { perror(index_filename); }
-  ffindex_write(index, index_fh);
+  *index_fh = fopen(index_filename, "w");
+  if((*index_fh) == NULL) { perror(index_filename); }
+  ffindex_write(index, (*index_fh));
 }
 
 void ffmerge_splits(const char* data_filename, const char* index_filename,
@@ -614,7 +617,7 @@ void ffmerge_splits(const char* data_filename, const char* index_filename,
   fclose(data_file);
   fflush(index_file);
 
-  ffsort_index(index_filename, index_file);
+  ffsort_index(index_filename, &index_file);
   fclose(index_file);
 }
 

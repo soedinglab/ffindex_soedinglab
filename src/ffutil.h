@@ -21,6 +21,7 @@
 #include <err.h>
 #include <errno.h>
 #include <string.h>
+#include <stdio.h>
 
 
 int fferror_print(char *sourcecode_filename, int line, const char *function_name, const char *message);
@@ -28,6 +29,8 @@ int fferror_print(char *sourcecode_filename, int line, const char *function_name
 char* ffnchomp(char *s, size_t len);
 
 size_t ffcount_lines(const char *filename);
+
+size_t ffcount_lines_file(FILE *fp);
 
 #endif
 /* vim: ts=2 sw=2 et
