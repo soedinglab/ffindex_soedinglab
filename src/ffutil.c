@@ -48,25 +48,24 @@ size_t ffcount_lines(const char *filename)
     return 0;
   }
 
-  size_t lines = ffcount_lines_file(fp);
+  size_t lines = 0;
+  int ch = 0;
+
+  do {
+    ch = fgetc(fp);
+    if (ch == '\n') {
+      lines++;
+    }
+  } while(ch != EOF);
+
+  if(ch != '\n' && lines != 0) {
+    lines++;
+  }
+
   fclose(fp);
 
   return lines;
 }
-
-size_t ffcount_lines_file(FILE *fp)
-{
-  size_t lines = 0;
-  while (!feof(fp)) {
-    char ch = (char) fgetc(fp);
-    if (ch == '\n') {
-      lines++;
-    }
-  }
-
-  return lines;
-}
-
 
 /* vim: ts=2 sw=2 et
 */

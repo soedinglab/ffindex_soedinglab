@@ -30,8 +30,6 @@ char* ffnchomp(char *s, size_t len);
 
 size_t ffcount_lines(const char *filename);
 
-size_t ffcount_lines_file(FILE *fp);
-
 #endif
 /* vim: ts=2 sw=2 et
 */

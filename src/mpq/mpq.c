@@ -7,13 +7,15 @@ int MPQ_is_init = 0;
 
 enum {
     TAG_JOB,
-    TAG_FREE
+    TAG_FREE,
+    TAG_FINISHED
 };
 
 enum {
     MSG_RELEASE,
     MSG_JOB,
-    MSG_FREE
+    MSG_FREE,
+    MSG_FINISHED
 };
 
 int MPQ_Init(int argc, char **argv, const size_t num_jobs) {
@@ -43,6 +45,7 @@ void MPQ_Worker(MPQ_Payload_t payload, void *env) {
     }
 
     int message_free = MSG_FREE;
+    int message_finished = MSG_FINISHED;
     int message_job[3];
 
     while (1) {
@@ -50,6 +53,7 @@ void MPQ_Worker(MPQ_Payload_t payload, void *env) {
 
         MPI_Recv(message_job, 3, MPI_INT, MPQ_MASTER, TAG_JOB, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         if (message_job[0] == MSG_RELEASE) {
+            MPI_Send(&message_finished, 1, MPI_INT, MPQ_MASTER, TAG_FINISHED, MPI_COMM_WORLD);
             break;
         }
 
@@ -96,5 +100,6 @@ void MPQ_Master(const size_t split_size) {
 
     for (int i = 1; i < MPQ_size; i++) {
         MPQ_Worker_Release(i);
+        MPI_Recv(message, 1, MPI_INT, i, TAG_FINISHED, MPI_COMM_WORLD, &status);
     }
 }
