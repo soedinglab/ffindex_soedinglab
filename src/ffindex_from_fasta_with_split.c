@@ -38,6 +38,42 @@ void usage(char *program_name)
                     "\nBases on a Design and Implementation of Andreas W. Hauser <hauser@genzentrum.lmu.de>.\n", program_name);
 }
 
+void get_short_id(char* id, const char delimiter, const int field) {
+  size_t l = strlen(id);
+  size_t first_separator_index = l;
+  if (field == 1) {
+    first_separator_index = -1;
+  }
+
+  size_t second_separator_index = l;
+
+  int field_counter = 1;
+  for (size_t index = 0; index < l; index++) {
+    if (id[index] == delimiter) {
+      field_counter++;
+      if(field_counter == field && first_separator_index == l) {
+        first_separator_index = index;
+      }
+      else if(field_counter - 1 == field && second_separator_index == l) {
+        second_separator_index = index;
+        break;
+      }
+    }
+  }
+
+  if (field_counter < field) {
+    fprintf(stderr, "Warning: short id could not be extracted from '%s'!", id);
+  }
+
+  char* substr = malloc(sizeof(char*) * (second_separator_index - first_separator_index));
+  strncpy(substr, id + first_separator_index + 1, (second_separator_index - first_separator_index - 1));
+
+  strncpy(id, substr, (second_separator_index - first_separator_index - 1));
+  id[second_separator_index - first_separator_index - 1] = '\0';
+
+  free(substr);
+}
+
 int main(int argn, char **argv)
 {
   int sort = 0, version = 0;
@@ -177,40 +213,21 @@ int main(int argn, char **argv)
     }
     seq_id++;
 
+    get_short_id(name, '|', 2);
+
     ffindex_insert_memory(data_header_file, index_header_file, &header_offset, header, header_length, name);
     ffindex_insert_memory(data_sequence_file, index_sequence_file, &sequence_offset, sequence, sequence_length, name);
   }
   fclose(data_header_file);
   fclose(data_sequence_file);
 
-  /* Sort the index entries and write back */
-  if(sort)
-  {
-    rewind(index_header_file);
-    ffindex_index_t* index = ffindex_index_parse(index_header_file, 0);
-    if(index == NULL)
-    {
-      perror("ffindex_index_parse failed");
-      exit(EXIT_FAILURE);
-    }
-    fclose(index_header_file);
-    ffindex_sort_index_file(index);
-    index_header_file = fopen(index_header_filename, "w");
-    if(index_header_file == NULL) { perror(index_header_filename); return EXIT_FAILURE; }
-    err += ffindex_write(index, index_header_file);
+  fclose(index_header_file);
+  fclose(index_sequence_file);
 
-    rewind(index_sequence_file);
-    index = ffindex_index_parse(index_sequence_file, 0);
-    if(index == NULL)
-    {
-      perror("ffindex_index_parse failed");
-      exit(EXIT_FAILURE);
-    }
-    fclose(index_sequence_file);
-    ffindex_sort_index_file(index);
-    index_sequence_file = fopen(index_sequence_filename, "w");
-    if(index_sequence_file == NULL) { perror(index_sequence_filename); return EXIT_FAILURE; }
-    err += ffindex_write(index, index_sequence_file);
+  /* Sort the index entries and write back */
+  if(sort) {
+    ffsort_index(index_header_filename);
+    ffsort_index(index_sequence_filename);
   }
 
   return err;
