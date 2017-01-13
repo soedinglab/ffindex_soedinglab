@@ -103,7 +103,7 @@ int ffindex_insert_filestream(FILE *data_file, FILE *index_file, size_t *offset,
 void ffsort_index(const char* index_filename);
 
 void ffmerge_splits(const char* data_filename, const char* index_filename,
-                    int splits, int remove_temporary);
+                    int first_split_index, int last_split_index, int remove_temporary);
 
 char* ffindex_copyright();
 

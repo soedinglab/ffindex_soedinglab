@@ -548,7 +548,7 @@ void ffsort_index(const char* index_filename) {
 }
 
 void ffmerge_splits(const char* data_filename, const char* index_filename,
-                    int splits, int remove_temporary) {
+                    int first_split_index, int last_split_index, int remove_temporary) {
 
   FILE* data_file  = fopen(data_filename, "w");
   if( data_file == NULL) {
@@ -569,7 +569,7 @@ void ffmerge_splits(const char* data_filename, const char* index_filename,
   size_t offset = 0;
 
   // Append ffindex split databases
-  for (int i = 0; i < splits; i++) {
+  for (int i = first_split_index; i <= last_split_index; i++) {
     char data_file_name_to_add[FILENAME_MAX];
     char index_file_name_to_add[FILENAME_MAX];
 
