@@ -463,7 +463,7 @@ int main(int argn, char **argv) {
             MPI_Barrier(MPI_COMM_WORLD);
 
             int removeTmp = keepTmp == 0;
-            ffmerge_splits(data_filename_out, index_filename_out, 1, MPQ_size, removeTmp);
+            ffmerge_splits(data_filename_out, index_filename_out, 1, MPQ_size - 1, removeTmp);
         }
     } else {
         if (mpq_status == MPQ_ERROR_NO_WORKERS) {
