@@ -34,10 +34,10 @@ if(MPI_C_FOUND AND HAVE_MPI)
     )
 endif()
 
-add_executable(ffindex_apply
+add_executable(ffindex_reduce
 	ffindex_apply.c
 )
-target_link_libraries (ffindex_apply ffindex)
+target_link_libraries (ffindex_reduce ffindex)
 
 add_executable(ffindex_build
   ffindex_build.c
@@ -100,7 +100,7 @@ install(TARGETS ffindex_shared
 
 
 INSTALL( 
-  TARGETS ffindex_apply
+  TARGETS ffindex_reduce
   ffindex_build
   ffindex_from_fasta
   ffindex_get
