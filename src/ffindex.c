@@ -31,7 +31,6 @@
 #include <unistd.h>
 
 #include "ext/fmemopen.h" /* For OS not yet implementing this new standard function */
-#include "twalkmisc.h"
 
 /* XXX Use page size? */
 #define FFINDEX_BUFFER_SIZE 4096
@@ -523,8 +522,24 @@ void action(const void *node, const VISIT which, const int depth, void * misc)
 int ffindex_tree_write(ffindex_index_t* index, FILE* index_file)
 {
   int ret = EXIT_SUCCESS;
-
-  twalkmisc(index->tree_root, action, (void *) index_file);
+  void action(const void *node, const VISIT which, const int depth)
+  {
+    ffindex_entry_t *entry;
+    switch (which)
+    {
+      case preorder:
+        break;
+      case endorder:
+        break;
+      case postorder:
+      case leaf:
+        entry = *(ffindex_entry_t **) node;
+        if(fprintf(index_file, "%s\t%zd\t%zd\n", entry->name, entry->offset, entry->length) < 0)
+          ret = EXIT_FAILURE;
+        break;
+    }
+  }
+  twalk(index->tree_root, action);
   return ret;
 }
 

@@ -1,3 +1,5 @@
+//TODO buggous at the moment... switched back to default search.h
+
 #ifndef _TWALKMISC
 #define _TWALKMISC
 #include <search.h>
