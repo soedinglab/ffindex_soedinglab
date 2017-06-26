@@ -93,6 +93,8 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
     struct timeval tv;
     gettimeofday(&tv, NULL);
     time_t start = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
+    // export the name
+    setenv("FFINDEX_ENTRY_NAME", entry->name, 1);
     int err = posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ);
     if (err) {
         fprintf(stderr, "ERROR in fork()\n");
