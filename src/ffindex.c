@@ -610,8 +610,9 @@ void ffmerge_splits(const char* data_filename, const char* index_filename,
 
     size_t data_size;
     char *data_to_add = ffindex_mmap_data(data_file_to_add, &data_size);
-    ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add,
-        0);
+
+    size_t lines = ffcount_lines(index_file_name_to_add);
+    ffindex_index_t* index_to_add = ffindex_index_parse(index_file_to_add, lines);
 
     for(size_t entry_i = 0; entry_i < index_to_add->n_entries; entry_i++)
     {
