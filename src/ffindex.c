@@ -94,36 +94,61 @@ int ffindex_insert_ffindex(FILE* data_file, FILE* index_file, size_t* offset, ch
   return EXIT_SUCCESS;
 }
 
-/* Insert a memory chunk (string even without \0) into ffindex */
-int ffindex_insert_memory(FILE *data_file, FILE *index_file, size_t *offset, char *from_start, size_t from_length, char *name)
-{
-    int myerrno = 0;
-    size_t offset_before = *offset;
+// Insert a memory chunk into ffindex without ending an entry
+int ffindex_insert_memory_add(FILE *data_file, size_t *offset, char *from_start, size_t from_length) {
     size_t write_size = fwrite(from_start, sizeof(char), from_length, data_file);
+    if (from_length != write_size) {
+        return 1;
+    }
     *offset += write_size;
-    if(from_length != write_size)
-      fferror_print(__FILE__, __LINE__, __func__, name);
 
-    /* Seperate by '\0' and thus also make sure at least one byte is written */
+    if (ferror(data_file) != 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+// Finishes one entry that was filled by ffindex_insert_memory_add call(s)
+int ffindex_insert_memory_end(FILE *data_file, FILE *index_file, size_t offset_before, size_t *offset, char *name) {
+     // Seperate by '\0' and thus also make sure at least one byte is written
     char buffer[1] = {'\0'};
-    if(fwrite(buffer, sizeof(char), 1, data_file) != 1)
-      perror("ffindex_insert_memory");
+    if (fwrite(buffer, sizeof(char), 1, data_file) != 1) {
+        perror("ffindex_insert_memory_end");
+        return 1;
+    }
     *offset += 1;
-    if(ferror(data_file) != 0)
-      goto EXCEPTION_ffindex_insert_memory;
+
+    if (ferror(data_file) != 0) {
+        perror("ffindex_insert_memory_end");
+        return 1;
+    }
 
     /* write index entry */
     fprintf(index_file, "%s\t%zd\t%zd\n", name, offset_before, *offset - offset_before);
 
-    return myerrno;
-
-EXCEPTION_ffindex_insert_memory:
-    {
-      fferror_print(__FILE__, __LINE__, __func__, "");
-      return myerrno;
-    }
+    return 0;
 }
 
+// Insert a complete memory chunk (string even without \0) into ffindex
+int ffindex_insert_memory(FILE *data_file, FILE *index_file, size_t *offset, char *from_start, size_t from_length, char *name) {
+    size_t offset_before = *offset;
+
+    int status = 0;
+    status = ffindex_insert_memory_add(data_file, offset, from_start, from_length);
+    if (status != 0) {
+        fferror_print(__FILE__, __LINE__, __func__, name);
+        return status;
+    }
+
+    status = ffindex_insert_memory_end(data_file, index_file, offset_before, offset, name);
+    if (status != 0) {
+        fferror_print(__FILE__, __LINE__, __func__, name);
+        return status;
+    }
+
+    return 0;
+}
 
 /* Insert all file from a list into ffindex */
 int ffindex_insert_list_file(FILE *data_file, FILE *index_file, size_t *start_offset, FILE *list_file)

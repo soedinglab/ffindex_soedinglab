@@ -54,6 +54,10 @@ int ffindex_insert_ffindex(FILE* data_file, FILE* index_file, size_t* offset, ch
 
 ffindex_entry_t* ffindex_get_entry_by_name(ffindex_index_t *index, char *name);
 
+int ffindex_insert_memory_add(FILE *data_file, size_t *offset, char *from_start, size_t from_length);
+
+int ffindex_insert_memory_end(FILE *data_file, FILE *index_file, size_t offset_before, size_t *offset, char *name);
+
 int ffindex_insert_memory(FILE *data_file, FILE *index_file, size_t *offset, char *from_start, size_t from_length, char *name);
 
 int ffindex_insert_file(FILE *data_file, FILE *index_file, size_t *offset, const char *path, char *name);

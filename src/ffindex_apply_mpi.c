@@ -39,14 +39,13 @@
 #include "mpq/mpq.h"
 #endif
 
-char read_buffer[400 * 1024 * 1024];
 extern char **environ;
 
 int
 ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, char **program_argv,
                        FILE *data_file_out, FILE *index_file_out, FILE *log_file_out, size_t *offset, int quiet) {
     int ret = 0;
-    int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
+    const int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
 
     int pipefd_stdin[2];
     int pipefd_stdout[2];
@@ -119,7 +118,9 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
             fcntl(pipefd_stdout[0], F_SETFL, flags | O_NONBLOCK);
         }
 
-        char *b = read_buffer;
+        char buffer[PIPE_BUF];
+
+        size_t start_offset = *offset;
 
         // Write file data to child's stdin.
         ssize_t written = 0;
@@ -144,9 +145,9 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
 
             if (capture_stdout) {
                 // To avoid blocking try to read some data
-                ssize_t r = read(pipefd_stdout[0], b, PIPE_BUF);
+                ssize_t r = read(pipefd_stdout[0], buffer, PIPE_BUF);
                 if (r > 0) {
-                    b += r;
+                    ffindex_insert_memory_add(data_file_out, offset, buffer, r);
                 }
             }
         }
@@ -156,12 +157,12 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
             // Read rest
             fcntl(pipefd_stdout[0], F_SETFL, flags); // Remove O_NONBLOCK
             ssize_t r;
-            while ((r = read(pipefd_stdout[0], b, PIPE_BUF)) > 0) {
-                b += r;
+            while ((r = read(pipefd_stdout[0], buffer, PIPE_BUF)) > 0) {
+                ffindex_insert_memory_add(data_file_out, offset, buffer, r);
             }
             close(pipefd_stdout[0]);
 
-            ffindex_insert_memory(data_file_out, index_file_out, offset, read_buffer, b - read_buffer, entry->name);
+            ffindex_insert_memory_end(data_file_out, index_file_out, start_offset, offset, entry->name);
         }
 
         int status;
