@@ -31,6 +31,7 @@
 #include <getopt.h>   // getopt_long
 
 #include <spawn.h>     // spawn_*
+#include <poll.h>
 
 #include "ffindex.h"
 #include "ffutil.h"
@@ -44,137 +45,174 @@ extern char **environ;
 int
 ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, char **program_argv,
                        FILE *data_file_out, FILE *index_file_out, FILE *log_file_out, size_t *offset, int quiet) {
-    int ret = 0;
     const int capture_stdout = (data_file_out != NULL && index_file_out != NULL);
 
     int pipefd_stdin[2];
-    int pipefd_stdout[2];
-
-    ret = pipe(pipefd_stdin);
-    if (ret != 0) {
-        fprintf(stderr, "ERROR in pipe stdin!\n");
+    if (pipe(pipefd_stdin) != 0) {
         perror(entry->name);
         return errno;
     }
 
-    if (capture_stdout) {
-        ret = pipe(pipefd_stdout);
-        if (ret != 0) {
-            fprintf(stderr, "ERROR in pipe stdout!\n");
-            perror(entry->name);
+    int pipefd_stdout[2];
+    if (capture_stdout && pipe(pipefd_stdout) != 0) {
+        perror(entry->name);
+        return errno;
+    }
+
+    posix_spawn_file_actions_t factions;
+    if (posix_spawn_file_actions_init(&factions) != 0) {
+        perror("posix_spawn_file_actions_init");
+        return errno;
+    }
+    if (posix_spawn_file_actions_addclose(&factions, pipefd_stdin[1]) != 0) {
+        perror("posix_spawn_file_actions_addclose");
+        return errno;
+    }
+    if (posix_spawn_file_actions_adddup2(&factions, pipefd_stdin[0], fileno(stdin)) != 0) {
+        perror("posix_spawn_file_actions_adddup2");
+        return errno;
+    }
+
+    if (capture_stdout && posix_spawn_file_actions_addclose(&factions, pipefd_stdout[0]) != 0) {
+        perror("posix_spawn_file_actions_addclose");
+        return errno;
+    }
+    if (capture_stdout && posix_spawn_file_actions_adddup2(&factions, pipefd_stdout[1], fileno(stdout)) != 0) {
+        perror("posix_spawn_file_actions_adddup2");
+        return errno;
+    }
+
+    posix_spawnattr_t attr;
+    if (posix_spawnattr_init(&attr) != 0) {
+        perror("posix_spawnattr_init");
+        return errno;
+    }
+
+#ifdef POSIX_SPAWN_USEVFORK
+    short spawnFlags = 0;
+    spawnFlags |= POSIX_SPAWN_USEVFORK;
+    if (posix_spawnattr_setflags(&attr, spawnFlags) != 0) {
+        perror("posix_spawnattr_setflags");
+        return errno;
+    }
+#endif
+
+    struct timeval tv;
+    time_t start = 0, end = 0;
+    if (!quiet) {
+        gettimeofday(&tv, NULL);
+        start = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
+    }
+
+    pid_t child_pid;
+    setenv("FFINDEX_ENTRY_NAME", entry->name, 1);
+    if (posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ)) {
+        perror("posix_spawnp");
+        return errno;
+    }
+
+    // Read end is for child only
+    if (close(pipefd_stdin[0]) == -1) {
+        perror("close stdin0");
+        return errno;
+   }
+
+    if (capture_stdout && close(pipefd_stdout[1]) == -1) {
+        perror("close stdout1");
+        return errno;
+    }
+
+    size_t start_offset = *offset;
+    char *file_data = ffindex_get_data_by_entry(data, entry);
+
+    char buffer[PIPE_BUF];
+    size_t to_write = entry->length - 1;
+    size_t written = 0;
+
+    struct pollfd plist[2];
+    plist[0].fd = capture_stdout ? pipefd_stdout[0] : -1;
+    plist[1].fd = pipefd_stdin[1];
+    for (;;) {
+        plist[0].events = POLLIN;
+        plist[0].revents = 0;
+
+        size_t rest = to_write - written;
+        size_t batch_size = PIPE_BUF;
+        if (rest < PIPE_BUF) {
+            batch_size = rest;
+        }
+ 
+        plist[1].events = rest > 0 ? POLLOUT : 0;
+        plist[1].revents = 0;
+
+        if (poll(plist, 2, -1) == -1) {
+            if (errno == EAGAIN) {
+                usleep(1);
+                continue;
+            }
+            perror("poll");
             return errno;
         }
 
-        // Flush so child doesn't copy and also flushes, leading to duplicate output
+        if (plist[0].revents & POLLIN) {
+            //fprintf(stderr, "read  %d %d\n", plist[0].events, plist[1].events);
+            //fflush(stderr);
+            ssize_t bytes_read = read(pipefd_stdout[0], &buffer, sizeof(buffer));
+            if (bytes_read == -1) {
+                perror("read stdout0");
+                return errno;
+            }
+            ffindex_insert_memory_add(data_file_out, offset, buffer, bytes_read);
+        } else if (plist[1].revents & POLLOUT) {
+            //fprintf(stderr, "write %d %d\n", plist[0].events, plist[1].events);
+            //fflush(stderr);
+            ssize_t w = write(pipefd_stdin[1], file_data + written, batch_size);
+            if (w == -1) {
+                perror("write stdin1");
+                return errno;
+            }
+            written += w;
+        } else {
+            // nothing left to read or write
+            fprintf(stderr, "exit %d %d\n", plist[0].revents, plist[1].revents);
+            fflush(stderr);
+            break;
+        }
+    }
+    ffindex_insert_memory_end(data_file_out, index_file_out, start_offset, offset, entry->name);
+    fprintf(stderr, "out");
+    fflush(stderr);
+
+    if (close(pipefd_stdin[1]) == -1) {
+        perror("close stdin1");
+        return errno;
+    }
+
+    if (capture_stdout && close(pipefd_stdout[0]) == -1) {
+        perror("close stdout0");
+        return errno;
+    }
+
+    int status;
+    if (waitpid(child_pid, &status, 0) == -1) {
+        perror("waitpid");
+        return errno;
+    }
+
+    if (capture_stdout) {
         fflush(data_file_out);
         fflush(index_file_out);
     }
 
-    posix_spawn_file_actions_t factions;
-    posix_spawn_file_actions_init(&factions);
-    posix_spawn_file_actions_addclose(&factions, pipefd_stdin[1]);
-    posix_spawn_file_actions_adddup2(&factions, pipefd_stdin[0], fileno(stdin));
-    if (capture_stdout) {
-        posix_spawn_file_actions_addclose(&factions, pipefd_stdout[0]);
-        posix_spawn_file_actions_adddup2(&factions, pipefd_stdout[1], fileno(stdout));
+    if (!quiet) {
+        gettimeofday(&tv, NULL);
+        end = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
+        fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, end - start,
+                WEXITSTATUS(status));
     }
 
-    short spawnFlags = 0;
-    posix_spawnattr_t attr;
-    posix_spawnattr_init(&attr);
-#ifdef POSIX_SPAWN_USEVFORK
-    spawnFlags |= POSIX_SPAWN_USEVFORK;
-#endif
-    posix_spawnattr_setflags(&attr, spawnFlags);
-
-    pid_t child_pid;
-
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    time_t start = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
-    // export the name
-    setenv("FFINDEX_ENTRY_NAME", entry->name, 1);
-    int err = posix_spawnp(&child_pid, program_name, &factions, &attr, program_argv, environ);
-    if (err) {
-        fprintf(stderr, "ERROR in fork()\n");
-        perror(entry->name);
-        return errno;
-    }
-    else {
-        // parent writes to and possible reads from child
-        int flags = 0;
-
-        // Read end is for child only
-        close(pipefd_stdin[0]);
-
-        if (capture_stdout) {
-            close(pipefd_stdout[1]);
-        }
-
-        char *file_data = ffindex_get_data_by_entry(data, entry);
-
-        if (capture_stdout) {
-            flags = fcntl(pipefd_stdout[0], F_GETFL, 0);
-            fcntl(pipefd_stdout[0], F_SETFL, flags | O_NONBLOCK);
-        }
-
-        char buffer[PIPE_BUF];
-
-        size_t start_offset = *offset;
-
-        // Write file data to child's stdin.
-        ssize_t written = 0;
-        // Don't write ffindex trailing '\0'
-        size_t to_write = entry->length - 1;
-        while (written < to_write) {
-            size_t rest = to_write - written;
-            size_t batch_size = PIPE_BUF;
-            if (rest < PIPE_BUF) {
-                batch_size = rest;
-            }
-
-            ssize_t w = write(pipefd_stdin[1], file_data + written, batch_size);
-            if (w < 0 && errno != EPIPE) {
-                fprintf(stderr, "ERROR in child!\n");
-                perror(entry->name);
-                break;
-            }
-            else {
-                written += w;
-            }
-
-            if (capture_stdout) {
-                // To avoid blocking try to read some data
-                ssize_t r = read(pipefd_stdout[0], buffer, PIPE_BUF);
-                if (r > 0) {
-                    ffindex_insert_memory_add(data_file_out, offset, buffer, r);
-                }
-            }
-        }
-        close(pipefd_stdin[1]); // child gets EOF
-
-        if (capture_stdout) {
-            // Read rest
-            fcntl(pipefd_stdout[0], F_SETFL, flags); // Remove O_NONBLOCK
-            ssize_t r;
-            while ((r = read(pipefd_stdout[0], buffer, PIPE_BUF)) > 0) {
-                ffindex_insert_memory_add(data_file_out, offset, buffer, r);
-            }
-            close(pipefd_stdout[0]);
-
-            ffindex_insert_memory_end(data_file_out, index_file_out, start_offset, offset, entry->name);
-        }
-
-        int status;
-        waitpid(child_pid, &status, 0);
-        if (!quiet) {
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            time_t end = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
-            fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n", entry->name, entry->offset, entry->length, end - start,
-                    WEXITSTATUS(status));
-        }
-    }
+    posix_spawnattr_destroy(&attr);
+    posix_spawn_file_actions_destroy(&factions);
 
     return EXIT_SUCCESS;
 }
