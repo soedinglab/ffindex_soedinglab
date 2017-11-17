@@ -1,4 +1,5 @@
 #include "mpq.h"
+#include <unistd.h>
 
 int MPQ_size;
 int MPQ_rank;
@@ -48,10 +49,24 @@ void MPQ_Worker(MPQ_Payload_t payload, void *env) {
     int message_finished = MSG_FINISHED;
     int message_job[3];
 
+
     while (1) {
         MPI_Send(&message_free, 1, MPI_INT, MPQ_MASTER, TAG_FREE, MPI_COMM_WORLD);
 
-        MPI_Recv(message_job, 3, MPI_INT, MPQ_MASTER, TAG_JOB, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // a worker can be waiting for a long time, when no jobs are remaining
+        // with this recv potentially busy-waiting and using 100% of its core
+        // use an exponential backoff to get around this
+        unsigned int backoff = 1;
+        int flag = 0;
+        MPI_Request request;
+        MPI_Irecv(message_job, 3, MPI_INT, MPQ_MASTER, TAG_JOB, MPI_COMM_WORLD, &request);
+        while (flag == 0) {
+            MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+            usleep(backoff);
+            if (backoff < 1000) {
+                backoff *= 2;
+            }
+        }
         if (message_job[0] == MSG_RELEASE) {
             MPI_Send(&message_finished, 1, MPI_INT, MPQ_MASTER, TAG_FINISHED, MPI_COMM_WORLD);
             break;
