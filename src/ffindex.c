@@ -114,18 +114,26 @@ int ffindex_insert_memory_end(FILE *data_file, FILE *index_file, size_t offset_b
      // Seperate by '\0' and thus also make sure at least one byte is written
     char buffer[1] = {'\0'};
     if (fwrite(buffer, sizeof(char), 1, data_file) != 1) {
-        perror("ffindex_insert_memory_end");
+        perror("ffindex_insert_memory_end fwrite(data_file)");
         return 1;
     }
     *offset += 1;
 
     if (ferror(data_file) != 0) {
-        perror("ffindex_insert_memory_end");
+        perror("ffindex_insert_memory_end ferror(data_file)");
         return 1;
     }
 
     /* write index entry */
-    fprintf(index_file, "%s\t%zd\t%zd\n", name, offset_before, *offset - offset_before);
+    if (fprintf(index_file, "%s\t%zd\t%zd\n", name, offset_before, *offset - offset_before) < 0) {
+      perror("ffindex_insert_memory_end fprintf(index_file)");
+      return 1;
+    }
+
+    if (ferror(index_file) != 0) {
+      perror("ffindex_insert_memory_end ferror(index_file)");
+      return 1;
+    }
 
     return 0;
 }
@@ -155,8 +163,11 @@ int ffindex_insert_list_file(FILE *data_file, FILE *index_file, size_t *start_of
 {
   size_t offset = *start_offset;
   char path[PATH_MAX];
-  while(fgets(path, PATH_MAX, list_file) != NULL)
-    ffindex_insert_file(data_file, index_file, &offset, ffnchomp(path, strlen(path)), basename(path));
+  while(fgets(path, PATH_MAX, list_file) != NULL) {
+    char *name = strdup(basename(path));
+    ffindex_insert_file(data_file, index_file, &offset, ffnchomp(path, strlen(path)), ffnchomp(name, strlen(name)));
+    free(name);
+  }
 
   /* update return value */
   *start_offset = offset;

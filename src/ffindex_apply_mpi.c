@@ -23,6 +23,7 @@
 #include <limits.h> // PIPE_BUF
 #include <stdlib.h> // EXIT_*, system, malloc, free
 #include <unistd.h> // pipe, fork, close, dup2, execvp, write, read, opt*
+#include <stdbool.h>
 
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -114,7 +115,7 @@ pid_t create_pipe(const char *prog_path, char **prog_argv, char **environ, int f
 int
 ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, char **program_argv, char **environ,
                        FILE *data_file_out, FILE *index_file_out, FILE *log_file_out, size_t *offset, int quiet) {
-    const int ignore_stdout = (data_file_out == NULL) || (index_file_out == NULL);
+    const bool ignore_stdout = (data_file_out == NULL) || (index_file_out == NULL);
 
     struct timeval tv;
     time_t start = 0, end = 0;
@@ -133,7 +134,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
     // local_environment() leaves the first element free to use for ourselves
 	snprintf(environ[0], 64, "FFINDEX_ENTRY_NAME=%s", entry->name);
 
-    int write_closed = 0;
+    bool write_closed = false;
 	int fd[2];
     pid_t child_pid;
     if ((child_pid = create_pipe(program_name, program_argv, environ, fd)) == -1) {
@@ -164,7 +165,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
             batch_size = rest;
         }
 
-        plist[0].fd = write_closed == 0 ? fd[1] : fd[1] * -1;
+        plist[0].fd = write_closed == false ? fd[1] : fd[1] * -1;
         plist[0].events = POLLOUT;
         plist[0].revents = 0;
 
@@ -209,13 +210,16 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
                     status = errno;
                     break;
                 }
-                write_closed = 1;
+                write_closed = true;
             }
         } else if (plist[1].revents & POLLIN) {
             ssize_t bytes_read = read(plist[1].fd, &buffer, sizeof(buffer));
 			if (bytes_read > 0) {
-                if (ignore_stdout != 0) {
-                    ffindex_insert_memory_add(data_file_out, offset, buffer, bytes_read);
+                if (ignore_stdout == false) {
+                    if (ffindex_insert_memory_add(data_file_out, offset, buffer, bytes_read) != 0) {
+                        perror("ffindex_insert_memory_add");
+                        break;
+                    }
                 }
 			} else if (bytes_read < 0) {
 				if (errno != EAGAIN) {
@@ -223,7 +227,7 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
                     status = errno;
                     break;
 				}
-            } else if (bytes_read == 0 && write_closed == 1) {
+            } else if (bytes_read == 0 && write_closed == true) {
 				break;
             }
         } else {
@@ -233,11 +237,17 @@ ffindex_apply_by_entry(char *data, ffindex_entry_t *entry, char *program_name, c
     }
 
 fail:
-    if (ignore_stdout != 0) {
-        ffindex_insert_memory_end(data_file_out, index_file_out, start_offset, offset, entry->name);
+
+
+    if (ignore_stdout == false) {
+        if (ffindex_insert_memory_end(data_file_out, index_file_out, start_offset, offset, entry->name) != 0) {
+            perror("ffindex_insert_memory_end");
+        }
+        fflush(data_file_out);
+        fflush(index_file_out);
     }
 
-    if (write_closed == 0) {
+    if (write_closed == true) {
         close(fd[1]);
     }
 
@@ -251,15 +261,10 @@ fail:
         status = errno;
     }
 
-    if (ignore_stdout != 0) {
-        fflush(data_file_out);
-        fflush(index_file_out);
-    }
-
     if (!quiet && log_file_out != NULL) {
         gettimeofday(&tv, NULL);
         end = (tv.tv_sec) * 1000LL + (tv.tv_usec) / 1000;
-        fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n", 
+        fprintf(log_file_out, "%s\t%ld\t%ld\t%ld\t%d\n",
                 entry->name, entry->offset, entry->length, end - start, WEXITSTATUS(status));
     }
 
@@ -283,6 +288,7 @@ struct ffindex_apply_mpi_data_s {
 
 void ffindex_apply_worker_payload(void *pEnv, const size_t start, const size_t end) {
     ffindex_apply_mpi_data_t *env = (ffindex_apply_mpi_data_t *) pEnv;
+
     for (size_t i = start; i < end; i++) {
         ffindex_entry_t *entry = ffindex_get_entry_by_index(env->index, i);
         if (entry == NULL) {
@@ -362,6 +368,8 @@ char** local_environment() {
         }
     }
     local_environ[j] = NULL;
+
+    return local_environ;
 }
 
 void free_local_environment(char** local_environ) {
@@ -519,6 +527,7 @@ int main(int argn, char **argv) {
                          data_filename_out, MPQ_rank);
 
                 env->data_file_out = fopen(data_filename_out_rank, "w+");
+
                 if (env->data_file_out == NULL) {
                     fferror_print(__FILE__, __LINE__, "fopen", data_filename_out_rank);
                     exit_status = EXIT_FAILURE;
@@ -558,21 +567,21 @@ int main(int argn, char **argv) {
 
             // make sure that all written files are properly flushed and synced
             // so that ffmerge_splits wont work on stale data
-            if (env->log_file_out) {
+            if (env->log_file_out != stdout && env->log_file_out != NULL) {
                 int fd = fileno(env->log_file_out);
                 fflush(env->log_file_out);
                 fsync(fd);
                 fclose(env->log_file_out);
             }
             cleanup_6:
-            if (env->index_file_out) {
+            if (env->index_file_out != NULL) {
                 int fd = fileno(env->index_file_out);
                 fflush(env->index_file_out);
                 fsync(fd);
                 fclose(env->index_file_out);
             }
             cleanup_5:
-            if (env->data_file_out) {
+            if (env->data_file_out != NULL) {
                 int fd = fileno(env->data_file_out);
                 fflush(env->data_file_out);
                 fsync(fd);
