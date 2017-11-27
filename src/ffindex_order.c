@@ -110,12 +110,12 @@ int main(int argc, char **argv)
   sorted_index_file = fopen(sorted_index_filename, "r+");
   entries = ffcount_lines(index_filename);
   index = ffindex_index_parse(sorted_index_file, entries);
-  if(index == NULL)  {   
+  if(index == NULL)  {
     perror("ffindex_index_parse failed");
     exit(EXIT_FAILURE);
   }
   fclose(sorted_index_file);
-  
+
   ffindex_sort_index_file(index);
   sorted_index_file = fopen(sorted_index_filename, "w");
   if(sorted_index_file == NULL) {
