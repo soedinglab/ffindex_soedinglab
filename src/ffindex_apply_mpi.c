@@ -256,7 +256,10 @@ fail:
         status = errno;
     }
 
-    if (waitpid(child_pid, &status, 0) == -1) {
+    while (waitpid(child_pid, &status, 0) == -1) {
+        if (errno == EINTR) {
+            continue;
+        }
         perror("waitpid");
         status = errno;
     }
@@ -359,7 +362,7 @@ char** local_environment() {
         env_size++;
     }
 
-    char** local_environ = (char**)malloc(sizeof(char*) * env_size + 2);
+    char** local_environ = (char**)malloc(sizeof(char*) * (env_size + 2));
     size_t j = 0;
     local_environ[j++] = (char*)malloc(sizeof(char) * 64);
     for (size_t i = 0; environ[i] != NULL; ++i) {
