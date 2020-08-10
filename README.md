@@ -12,7 +12,7 @@ code shall give an impression of how to use the functions supported by the libra
 FFindex was written by Andreas Hauser <hauser@genzentrum.lmu.de>.
 
 Please add your name here if you distribute modified versions.
-* Martin Steinegger <martin.steinegger@mpibpc.mpg.de>
+* Martin Steinegger <martin.steinegger@snu.ac.kr>
 * Markus Meier <markus.meier@mpibpc.mpg.de>
 
 FFindex is provided under the Create Commons license "Attribution-ShareAlike 3.0",
